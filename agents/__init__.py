@@ -10,6 +10,7 @@ from .templates.langgraph_random_agent import LangGraphRandom
 from .templates.langgraph_thinking import LangGraphThinking
 from .templates.llm_agents import LLM, FastLLM, GuidedLLM, ReasoningLLM
 from .templates.multimodal import MultiModalLLM
+from .navigator.abstraction_navigator import AbstractionNavigator
 from .templates.random_agent import Random
 from .templates.reasoning_agent import ReasoningAgent
 from .templates.smolagents import SmolCodingAgent, SmolVisionAgent
@@ -28,6 +29,8 @@ for rec in Recorder.list():
 
 # update the agent dictionary to include subclasses of LLM class
 AVAILABLE_AGENTS["reasoningagent"] = ReasoningAgent
+AVAILABLE_AGENTS["abstractionnavigator"] = AbstractionNavigator
+AVAILABLE_AGENTS["random"] = Random
 
 __all__ = [
     "Swarm",
@@ -41,6 +44,7 @@ __all__ = [
     "ReasoningLLM",
     "GuidedLLM",
     "ReasoningAgent",
+    "AbstractionNavigator",
     "SmolCodingAgent",
     "SmolVisionAgent",
     "Agent",

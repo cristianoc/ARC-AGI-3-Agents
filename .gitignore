@@ -25,3 +25,6 @@ environment_files/
 
 # Lockfiles
 uv.lock
+
+# Lockfiles
+uv.lock

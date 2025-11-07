@@ -22,3 +22,6 @@ memory.db
 
 environment_files/
 *.aux
+
+# Lockfiles
+uv.lock

@@ -9,13 +9,13 @@ Mask semantics:
 from __future__ import annotations
 
 import hashlib
-from typing import Optional, Sequence, Tuple
+from typing import NamedTuple, Optional, Sequence
 
 import numpy as np
 
-from .types import Frame, FrameHash
+from .types import Frame, FrameHash, MaskRect
 
-MaskRect = Tuple[int, int, int, int]
+
 FrameMask = Sequence[MaskRect]
 
 HASH_ID_CHARS = 6
@@ -28,8 +28,8 @@ def hash_frame(frame: Frame, *, mask: FrameMask) -> FrameHash:
     arr = np.array(frame, dtype=np.uint8)
     if mask is not None:
         h, w = arr.shape[0], arr.shape[1]
-        for y0, y1, x0, x1 in mask:
-            arr[max(0, y0) : min(h, y1 + 1), max(0, x0) : min(w, x1 + 1)] = 0
+        for m in mask:
+            arr[max(0, m.y0) : min(h, m.y1 + 1), max(0, m.x0) : min(w, m.x1 + 1)] = 0
 
     digest = hashlib.blake2s(arr.tobytes(), digest_size=max(4, (HASH_ID_CHARS + 1) // 2)).hexdigest()
     return FrameHash(digest[:HASH_ID_CHARS])

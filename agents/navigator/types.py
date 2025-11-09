@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Mapping, NewType, Optional, Sequence, Set, Tuple
+from typing import NamedTuple, Any, Dict, Mapping, NewType, Optional, Sequence, Set, Tuple
 
 from ..structs import GameAction
 
@@ -15,6 +15,14 @@ logger = logging.getLogger(__name__)
 FrameHash = NewType("FrameHash", str)
 
 Frame = list[list[int]] # 64x64
+
+class MaskRect(NamedTuple):
+    """Inclusive rectangle specified as (y0, y1, x0, x1)."""
+
+    y0: int
+    y1: int
+    x0: int
+    x1: int
 
 
 @dataclass(frozen=True)
@@ -28,7 +36,7 @@ class EnergyHudMeasurement:
 
     value: int
     capacity: int
-    mask: Sequence[Tuple[int, int, int, int]]
+    mask: Sequence["MaskRect"]
     """Rectangles describing every pixel that belongs to the energy HUD.
 
     This mask is considered the canonical HUD geometry for the current frame and
@@ -90,7 +98,7 @@ class Memory:
     level_terminal_states: Dict[int, FrameHash] = field(default_factory=dict)
     game_over_states: Set[FrameHash] = field(default_factory=set)
 
-    def to_dict(self) -> Dict[str, Dict[str, object]]:
+    def to_dict(self) -> Dict[str, object]:
         return {
             "state_graph": {
                 str(state_hash): record.to_dict()

@@ -31,8 +31,7 @@ from typing import Any, Callable, Optional
 from ..agent import Agent
 from .abstractions import USER_ABSTRACTIONS
 from .base_navigator import BaseAbstractionNavigator
-from .grid_hash import MaskRect
-from .types import EnergyHudMeasurement, Frame
+from .types import EnergyHudMeasurement, Frame, MaskRect
 
 # ---------------------------------------------------------------------------
 # Game-specific abstractions
@@ -98,8 +97,12 @@ def detect_player(frame_cells: Frame) -> Optional[PlayerDetection]:
     return PlayerDetection(center=center, pixel_count=count, bbox=bbox)
 
 
-LS20_ENERGY_HUD_MASK: tuple[MaskRect, ...] = ((1, 2, 2, 45),)
-AS66_ENERGY_HUD_MASK: tuple[MaskRect, ...] = ((0, 0, 0, 63),)
+LS20_ENERGY_HUD_MASK: tuple[MaskRect, ...] = (MaskRect(y0=1, y1=2, x0=2, x1=45),)
+AS66_ENERGY_HUD_MASK: tuple[MaskRect, ...] = (
+    MaskRect(y0=0, y1=0, x0=0, x1=63),   # top HUD row
+    MaskRect(y0=0, y1=63, x0=0, x1=0),   # left border column
+    MaskRect(y0=0, y1=63, x0=63, x1=63), # right border column
+)
 
 
 def _measure_energy_ls20(frame: Frame) -> Optional[EnergyHudMeasurement]:

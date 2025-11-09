@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Mapping, NewType, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, NewType, Optional, Sequence, Set, Tuple
 
 from ..structs import GameAction
 
@@ -88,6 +88,7 @@ class Memory:
 
     state_graph: STATE_GRAPH = field(default_factory=dict)
     level_terminal_states: Dict[int, FrameHash] = field(default_factory=dict)
+    game_over_states: Set[FrameHash] = field(default_factory=set)
 
     def to_dict(self) -> Dict[str, Dict[str, object]]:
         return {
@@ -99,6 +100,9 @@ class Memory:
                 str(level): str(state_hash)
                 for level, state_hash in self.level_terminal_states.items()
             },
+            "game_over_states": [
+                str(state_hash) for state_hash in sorted(self.game_over_states, key=str)
+            ],
         }
 
     @classmethod
@@ -132,6 +136,19 @@ class Memory:
                         raw_state,
                     )
                     continue
+        game_over_payload = payload.get("game_over_states", [])
+        if isinstance(game_over_payload, (list, tuple, set)):
+            for raw_state in game_over_payload:
+                try:
+                    memory.game_over_states.add(FrameHash(str(raw_state)))
+                except (TypeError, ValueError):
+                    logger.warning(
+                        "Skipping invalid game-over entry %s",
+                        raw_state,
+                    )
+                    continue
+        elif game_over_payload:
+            logger.warning("game_over_states payload malformed; ignoring")
         return memory
 
 

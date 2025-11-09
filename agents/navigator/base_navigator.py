@@ -96,6 +96,7 @@ class BaseAbstractionNavigator(Agent):
         self._nfr_planner = NearFrontierPlanner(
             arrow_actions=self.ARROW_ACTIONS,
             state_graph=self.memory.state_graph,
+            blocked_states=self.memory.game_over_states,
         )
         self._snapshots: deque[NavigatorSnapshot] = deque(maxlen=3)
 
@@ -118,20 +119,25 @@ class BaseAbstractionNavigator(Agent):
     def choose_action(
         self, frames: list[FrameData], latest_frame: FrameData
     ) -> GameAction:
-        if latest_frame.state in (GameState.NOT_PLAYED, GameState.GAME_OVER):
+        if latest_frame.state is GameState.NOT_PLAYED:
             self._reset_tracking()
             action = GameAction.RESET
-            if latest_frame.state is GameState.GAME_OVER:
-                logger.info("%s resetting after game over", self.game_id)
-                action.reasoning = "game-over-reset"
-            else:
-                action.reasoning = "resetting before exploration"
+            action.reasoning = "resetting before exploration"
             return action
 
         # Package raw frame into a snapshot with derived abstractions/state info.
         snapshot = self._create_navigator_snapshot(latest_frame)
 
         prev_snapshot = self._snapshots[-2] if len(self._snapshots) >= 2 else None
+
+        if snapshot.game_state is GameState.GAME_OVER:
+            self._track_state_graph(prev_snapshot, snapshot)
+            self.memory.game_over_states.add(snapshot.frame_hash)
+            logger.info("%s resetting after game over", self.game_id)
+            self._reset_tracking()
+            action = GameAction.RESET
+            action.reasoning = "game-over-reset"
+            return action
 
         if self._should_reset_for_apparent_restart(prev_snapshot, snapshot):
             logger.info(
@@ -401,5 +407,3 @@ class BaseAbstractionNavigator(Agent):
             level = prev_snapshot.level + 1
             level_start_state = frame_hash
         return level, level_start_state
-
-

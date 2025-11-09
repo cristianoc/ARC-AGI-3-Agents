@@ -1,0 +1,47 @@
+import importlib.machinery
+import sys
+import types
+from pathlib import Path
+
+import pytest
+
+if "agents" not in sys.modules:
+    pkg = types.ModuleType("agents")
+    pkg.__path__ = [str(Path(__file__).resolve().parents[2])]
+    pkg.__spec__ = importlib.machinery.ModuleSpec(
+        name="agents", loader=None, is_package=True
+    )
+    sys.modules["agents"] = pkg
+
+from ..nfr_planner import NearFrontierPlanner
+from ..types import FrameHash, TransitionMap
+from ...structs import GameAction
+
+
+@pytest.mark.unit
+def test_frontier_skips_blocked_states():
+    safe_state = FrameHash("safe_state")
+    game_over_state = FrameHash("game_over_state")
+    state_graph = {
+        safe_state: TransitionMap(
+            transitions={GameAction.ACTION1: game_over_state}
+        ),
+        game_over_state: TransitionMap(),
+    }
+    blocked_states = {game_over_state}
+
+    planner = NearFrontierPlanner(
+        arrow_actions=[
+            GameAction.ACTION1,
+            GameAction.ACTION2,
+            GameAction.ACTION3,
+            GameAction.ACTION4,
+        ],
+        state_graph=state_graph,
+        blocked_states=blocked_states,
+    )
+
+    frontier = set(planner._frontier_states())
+
+    assert safe_state in frontier
+    assert game_over_state not in frontier

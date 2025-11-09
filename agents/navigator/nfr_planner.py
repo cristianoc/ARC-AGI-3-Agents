@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, MutableSet, Optional, Sequence, Tuple
 
 from ..structs import GameAction
 from .types import FrameHash, STATE_GRAPH, TransitionMap
@@ -21,9 +21,11 @@ class NearFrontierPlanner:
         *,
         arrow_actions: Sequence[GameAction],
         state_graph: STATE_GRAPH,
+        blocked_states: Optional[MutableSet[FrameHash]] = None,
     ) -> None:
         self._arrow_actions = list(arrow_actions)
         self._state_graph = state_graph
+        self._blocked_states = blocked_states if blocked_states is not None else set()
 
     def next_action(
         self,
@@ -40,6 +42,8 @@ class NearFrontierPlanner:
 
         adj = self._build_adj()
         s0 = level_start_state
+        if target_state is not None and target_state in self._blocked_states:
+            target_state = None
 
         dist_c, prev_c = self._bfs(adj, current_state)
         dist_s0, prev_s0 = self._bfs(adj, s0)
@@ -104,16 +108,27 @@ class NearFrontierPlanner:
         return None
 
     def _discovered_states(self) -> set[FrameHash]:
-        states: set[FrameHash] = set(self._state_graph.keys())
+        blocked = self._blocked_states
+        states: set[FrameHash] = {
+            state for state in self._state_graph.keys() if state not in blocked
+        }
         for transition_map in self._state_graph.values():
-            states.update(transition_map.transitions.values())
+            for target in transition_map.transitions.values():
+                if target in blocked:
+                    continue
+                states.add(target)
         return states
 
     def _build_adj(self) -> Dict[FrameHash, List[Tuple[FrameHash, GameAction]]]:
         adjacency: Dict[FrameHash, List[Tuple[FrameHash, GameAction]]] = {}
+        blocked = self._blocked_states
         for state, transition_map in self._state_graph.items():
+            if state in blocked:
+                continue
             for action, target in transition_map.transitions.items():
                 if action not in self._arrow_actions:
+                    continue
+                if target in blocked:
                     continue
                 adjacency.setdefault(state, []).append((target, action))
         return adjacency
@@ -156,6 +171,8 @@ class NearFrontierPlanner:
 
     def _frontier_states(self) -> Iterable[FrameHash]:
         for state in self._discovered_states():
+            if state in self._blocked_states:
+                continue
             for action in self._arrow_actions:
                 if not self._is_action_known(state, action):
                     yield state

@@ -19,8 +19,11 @@ Each play starts at a known level start state $s_0 \in S$. The navigator also tr
     \item $S_{\mathrm{disc}} \subseteq S$: discovered states from prior episodes.
     \item $T_{\mathrm{known}} : S_{\mathrm{disc}} \times A \to S_{\mathrm{disc}} \cup \{\bot\}$: the partial transition map recovered from experience (returning $\bot$ when a transition has not yet been seen).
     \item $A(s) \subseteq A$: actions the environment currently allows at state $s$.
-    \item $\mathcal{F} = \{\, s \in S_{\mathrm{disc}} \mid \exists a \in A_{\mathrm{nav}} : T_{\mathrm{known}}(s,a) = \bot \,\}$, the \emph{frontier}: discovered states with at least one action in $A_{\mathrm{nav}}$ whose successor is unknown in $T_{\mathrm{known}}$.
+    \item $S_{\mathrm{fail}} \subseteq S_{\mathrm{disc}}$: recorded failure states (e.g., game-over screens) that should not be expanded.
+    \item $\mathcal{F} = \{\, s \in S_{\mathrm{disc}} \setminus S_{\mathrm{fail}} \mid \exists a \in A_{\mathrm{nav}} : T_{\mathrm{known}}(s,a) = \bot \,\}$, the \emph{frontier}: discovered states with at least one action in $A_{\mathrm{nav}}$ whose successor is unknown in $T_{\mathrm{known}}$.
 \end{itemize}
+
+Failure states are updated whenever a transition produces a game-over screen, ensuring the planner does not repeatedly probe known dead ends.
 
 During an episode the agent sits in state $s_t$ with available actions $A_t = A(s_t)$. The planner must output $a_t \in A_t \cup \{\mathrm{RESET}\}$ to minimise the distance to a frontier while optionally using reset jumps to $s_0$. When a terminal state $s_{\mathrm{term}}(\ell)$ is known for the current level and supplied as \texttt{target\_state}, that state is treated as a temporary goal that can outweigh frontier expansion.
 

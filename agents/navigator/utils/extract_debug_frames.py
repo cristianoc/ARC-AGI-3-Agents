@@ -6,10 +6,11 @@ extract_debug_frames.py – export selected ARC‑AGI‑3 frames as PNGs.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import types
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 from types import ModuleType
 
 RECORDINGS_DIR = Path("recordings")
@@ -49,11 +50,24 @@ def _load_frame_viewer() -> ModuleType:
     return module
 
 
+def iter_frames_with_layers(record_path: Path) -> Iterable[list[list[list[int]]]]:
+    with record_path.open() as fh:
+        for raw_line in fh:
+            try:
+                data = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            frame_layers = data.get("data", {}).get("frame")
+            if not frame_layers:
+                continue
+            yield frame_layers
+
+
 def main() -> None:
     viewer = _load_frame_viewer()
     record_path = find_latest_recording()
     print(f"using recording: {record_path}")
-    frames = list(viewer.iter_frames_from_record(record_path))
+    frames = list(iter_frames_with_layers(record_path))
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     indices = FRAME_RANGE if FRAME_RANGE is not None else range(len(frames))
@@ -61,9 +75,9 @@ def main() -> None:
         if idx >= len(frames):
             print(f"frame {idx} out of range (only {len(frames)} frames available); stopping")
             break
-        frame = frames[idx]
+        frame_layers = frames[idx]
         out_path = OUTPUT_DIR / f"frame_{idx:04d}.png"
-        viewer.save_png(frame, out_path, scale=SCALE)
+        viewer.save_png(frame_layers[-1], out_path, scale=SCALE)
         print(out_path)
 
 

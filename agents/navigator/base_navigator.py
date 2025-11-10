@@ -130,12 +130,7 @@ class BaseAbstractionNavigator(Agent):
         prev_snapshot = self._snapshots[-2] if len(self._snapshots) >= 2 else None
 
         if prev_snapshot is None:
-            try:
-                self.memory.mark_initial(snapshot.frame_hash, snapshot.level)
-            except ValueError:
-                logger.warning(
-                    "%s initial state already recorded for level %d", self.game_id, snapshot.level
-                )
+            self.memory.mark_initial(snapshot.frame_hash, snapshot.level)
 
         self.memory.record_level(snapshot.frame_hash, snapshot.level)
 
@@ -148,7 +143,9 @@ class BaseAbstractionNavigator(Agent):
             action.reasoning = "game-over-reset"
             return action
 
-        if self._should_reset_for_apparent_restart(prev_snapshot, snapshot):
+        if prev_snapshot is not None and snapshot.score != prev_snapshot.score:
+            self._handle_level_change(prev_snapshot, snapshot)
+        elif self._should_reset_for_apparent_restart(prev_snapshot, snapshot):
             logger.info(
                 "%s apparent restart screen detected: state=%s score=%s",
                 self.game_id,
@@ -159,8 +156,7 @@ class BaseAbstractionNavigator(Agent):
             action.reasoning = "apparent-restart-reset"
             self.last_action = None
             return action
-        else:
-            self._track_state_graph(prev_snapshot, snapshot)
+        self._track_state_graph(prev_snapshot, snapshot)
 
         terminal_target = self.memory.terminal_for_level(snapshot.level)
         nfr_action = self._nfr_planner.next_action(
@@ -181,19 +177,6 @@ class BaseAbstractionNavigator(Agent):
             self.last_action = None
         return nfr_action
 
-    def export_frame(
-        self,
-        frame_data: FrameData,
-        out_path: Path,
-        *,
-        scale: int = 8,
-        grid: int | None = None,
-    ) -> Path:
-        """Persist the provided frame to an image for debugging."""
-
-        frame = frame_data.frame[0]
-        save_png(frame, out_path, PALETTE, scale=scale, grid=grid)
-        return out_path
 
     def _reset_tracking(self) -> None:
         self.last_action = None
@@ -202,8 +185,7 @@ class BaseAbstractionNavigator(Agent):
     def _create_navigator_snapshot(self, frame_data: FrameData) -> NavigatorSnapshot:
 
         prev_snapshot = self._snapshots[-1] if self._snapshots else None
-        prev_prev_snapshot = self._snapshots[-2] if len(self._snapshots) >= 2 else None
-        frame = frame_data.frame[0]
+        frame = frame_data.frame[-1]
 
         energy_measurement = self._measure_energy(frame)
         mask: FrameMask = tuple(energy_measurement.mask) if energy_measurement else ()
@@ -228,7 +210,6 @@ class BaseAbstractionNavigator(Agent):
 
         level, level_start_state = self._infer_level(
             prev_snapshot,
-            prev_prev_snapshot,
             score=frame_data.score,
             frame_hash=frame_hash,
         )
@@ -247,7 +228,6 @@ class BaseAbstractionNavigator(Agent):
         )
 
         self._snapshots.append(snapshot)
-        self._update_level_state(prev_snapshot, snapshot)
         return snapshot
 
     def _should_reset_for_apparent_restart(
@@ -320,18 +300,6 @@ class BaseAbstractionNavigator(Agent):
 
         super().cleanup(scorecard)
 
-    def _update_level_state(
-        self,
-        prev_snapshot: Optional[NavigatorSnapshot],
-        snapshot: NavigatorSnapshot,
-    ) -> None:
-        level_changed = (
-            prev_snapshot is not None and snapshot.level != prev_snapshot.level
-        )
-
-        if level_changed and prev_snapshot is not None:
-            self._handle_level_change(prev_snapshot, snapshot)
-
     def _track_state_graph(
         self,
         prev_snapshot: Optional[NavigatorSnapshot],
@@ -383,10 +351,7 @@ class BaseAbstractionNavigator(Agent):
         level_completed = prev_snapshot.level
         terminal_hash = prev_snapshot.frame_hash
         self.memory.mark_terminal(terminal_hash, level_completed)
-        try:
-            self.memory.mark_initial(snapshot.level_start_state, snapshot.level)
-        except ValueError as exc:
-            logger.warning("%s", exc)
+        self.memory.mark_initial(snapshot.level_start_state, snapshot.level)
         logger.info(
             "%s level advanced to %d at step %d; start hash=%s; recorded terminal state for level %d=%s",
             self.game_id,
@@ -400,22 +365,11 @@ class BaseAbstractionNavigator(Agent):
     def _infer_level(
         self,
         prev_snapshot: Optional[NavigatorSnapshot],
-        prev_prev_snapshot: Optional[NavigatorSnapshot],
         *,
         score: int,
         frame_hash: FrameHash,
     ) -> tuple[int, FrameHash]:
-        if prev_snapshot is None:
-            return score + 1, frame_hash
-
-        level = prev_snapshot.level
-        level_start_state = prev_snapshot.level_start_state
-        if (
-            prev_prev_snapshot is not None
-            and prev_snapshot.score != prev_prev_snapshot.score
-            and score == prev_snapshot.score
-            and frame_hash != prev_snapshot.frame_hash
-        ):
-            level = prev_snapshot.level + 1
-            level_start_state = frame_hash
-        return level, level_start_state
+        level = score + 1
+        if prev_snapshot is None or level != prev_snapshot.level:
+            return level, frame_hash
+        return level, prev_snapshot.level_start_state

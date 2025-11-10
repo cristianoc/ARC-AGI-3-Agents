@@ -65,6 +65,7 @@ class StateRecord:
 
     transitions: Dict[GameAction, FrameHash] = field(default_factory=dict)
     level: Optional[int] = None
+    is_initial: bool = False
     is_terminal: bool = False
     is_game_over: bool = False
 
@@ -76,6 +77,8 @@ class StateRecord:
         }
         if self.level is not None:
             payload["level"] = self.level
+        if self.is_initial:
+            payload["is_initial"] = True
         if self.is_terminal:
             payload["is_terminal"] = True
         if self.is_game_over:
@@ -111,11 +114,13 @@ class StateRecord:
                     level = int(str(level_payload))
             except (TypeError, ValueError):
                 logger.warning("Skipping invalid level entry %s", level_payload)
+        is_initial = bool(payload.get("is_initial", False))
         is_terminal = bool(payload.get("is_terminal", False))
         is_game_over = bool(payload.get("is_game_over", False))
         return cls(
             transitions=transitions,
             level=level,
+            is_initial=is_initial,
             is_terminal=is_terminal,
             is_game_over=is_game_over,
         )
@@ -176,6 +181,19 @@ class Memory:
         record.level = level
         record.is_terminal = True
 
+    def mark_initial(self, frame_hash: FrameHash, level: int) -> None:
+        for state_hash, record in self.state_graph.items():
+            if record.level == level and record.is_initial:
+                if state_hash != frame_hash:
+                    raise ValueError(
+                        f"Initial state for level {level} already recorded as {state_hash}; "
+                        f"cannot reassign to {frame_hash}"
+                    )
+                return
+        record = self.ensure_state(frame_hash)
+        record.level = level
+        record.is_initial = True
+
     def record_level(self, frame_hash: FrameHash, level: int) -> None:
         record = self.ensure_state(frame_hash)
         record.level = level
@@ -183,6 +201,12 @@ class Memory:
     def terminal_for_level(self, level: int) -> Optional[FrameHash]:
         for state_hash, record in self.state_graph.items():
             if record.level == level and record.is_terminal:
+                return state_hash
+        return None
+
+    def initial_for_level(self, level: int) -> Optional[FrameHash]:
+        for state_hash, record in self.state_graph.items():
+            if record.level == level and record.is_initial:
                 return state_hash
         return None
 

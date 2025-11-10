@@ -129,6 +129,14 @@ class BaseAbstractionNavigator(Agent):
 
         prev_snapshot = self._snapshots[-2] if len(self._snapshots) >= 2 else None
 
+        if prev_snapshot is None:
+            try:
+                self.memory.mark_initial(snapshot.frame_hash, snapshot.level)
+            except ValueError:
+                logger.warning(
+                    "%s initial state already recorded for level %d", self.game_id, snapshot.level
+                )
+
         self.memory.record_level(snapshot.frame_hash, snapshot.level)
 
         if snapshot.game_state is GameState.GAME_OVER:

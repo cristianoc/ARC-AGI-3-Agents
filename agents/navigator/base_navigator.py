@@ -378,19 +378,11 @@ class BaseAbstractionNavigator(Agent):
         except ValueError as exc:
             logger.warning("%s", exc)
         logger.info(
-            "%s level advanced to %d at step %d",
+            "%s level advanced to %d at step %d; start hash=%s; recorded terminal state for level %d=%s",
             self.game_id,
             snapshot.level,
             self.action_counter,
-        )
-        logger.info(
-            "%s level start confirmed at hash=%s",
-            self.game_id,
             snapshot.level_start_state,
-        )
-        logger.info(
-            "%s recorded terminal state for level %d: %s",
-            self.game_id,
             level_completed,
             terminal_hash,
         )

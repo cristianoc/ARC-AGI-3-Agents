@@ -331,8 +331,6 @@ class BaseAbstractionNavigator(Agent):
     ) -> None:
         self._record_state_visit(snapshot.frame_hash)
         self.memory.record_level(snapshot.frame_hash, snapshot.level)
-        if prev_snapshot is not None:
-            self.memory.record_level(prev_snapshot.frame_hash, prev_snapshot.level)
 
         previous_state_hash = prev_snapshot.frame_hash if prev_snapshot else None
         if (
@@ -375,6 +373,10 @@ class BaseAbstractionNavigator(Agent):
         level_completed = prev_snapshot.level
         terminal_hash = prev_snapshot.frame_hash
         self.memory.mark_terminal(terminal_hash, level_completed)
+        try:
+            self.memory.mark_initial(snapshot.level_start_state, snapshot.level)
+        except ValueError as exc:
+            logger.warning("%s", exc)
         logger.info(
             "%s level advanced to %d at step %d",
             self.game_id,

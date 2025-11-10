@@ -14,7 +14,7 @@ if "agents" not in sys.modules:
     sys.modules["agents"] = pkg
 
 from ..nfr_planner import NearFrontierPlanner
-from ..types import FrameHash, TransitionMap
+from ..types import FrameHash, StateRecord
 from ...structs import GameAction
 
 
@@ -23,12 +23,11 @@ def test_frontier_skips_blocked_states():
     safe_state = FrameHash("safe_state")
     game_over_state = FrameHash("game_over_state")
     state_graph = {
-        safe_state: TransitionMap(
+        safe_state: StateRecord(
             transitions={GameAction.ACTION1: game_over_state}
         ),
-        game_over_state: TransitionMap(),
+        game_over_state: StateRecord(is_game_over=True),
     }
-    blocked_states = {game_over_state}
 
     planner = NearFrontierPlanner(
         arrow_actions=[
@@ -38,7 +37,6 @@ def test_frontier_skips_blocked_states():
             GameAction.ACTION4,
         ],
         state_graph=state_graph,
-        blocked_states=blocked_states,
     )
 
     frontier = set(planner._frontier_states())

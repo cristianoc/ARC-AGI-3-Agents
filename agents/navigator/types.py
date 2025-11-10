@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import NamedTuple, Any, Dict, Mapping, NewType, Optional, Sequence, Set, Tuple
+from typing import NamedTuple, Any, Dict, Mapping, NewType, Optional, Sequence, Set
 
 from ..structs import GameAction
 
@@ -60,34 +60,68 @@ class EnergyHudMeasurement:
 
 
 @dataclass
-class TransitionMap:
-    """Outgoing transitions observed from a single frame hash."""
+class StateRecord:
+    """Observed information about a specific frame hash."""
 
     transitions: Dict[GameAction, FrameHash] = field(default_factory=dict)
+    level: Optional[int] = None
+    is_terminal: bool = False
+    is_game_over: bool = False
 
-    def to_dict(self) -> Dict[str, str]:
-        return {action.name: str(target) for action, target in self.transitions.items()}
+    def to_dict(self) -> Dict[str, object]:
+        payload: Dict[str, object] = {
+            "transitions": {
+                action.name: str(target) for action, target in self.transitions.items()
+            }
+        }
+        if self.level is not None:
+            payload["level"] = self.level
+        if self.is_terminal:
+            payload["is_terminal"] = True
+        if self.is_game_over:
+            payload["is_game_over"] = True
+        return payload
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, str]) -> "TransitionMap":
+    def from_dict(cls, payload: Mapping[str, object]) -> "StateRecord":
+        transitions_payload = payload.get("transitions", {})
         transitions: Dict[GameAction, FrameHash] = {}
-        for action_name, raw in payload.items():
-            if action_name not in GameAction.__members__:
-                logger.warning("Skipping unknown action in memory payload: %s", action_name)
-                continue
+        if isinstance(transitions_payload, Mapping):
+            for action_name, raw in transitions_payload.items():
+                if action_name not in GameAction.__members__:
+                    logger.warning("Skipping unknown action in memory payload: %s", action_name)
+                    continue
+                try:
+                    transitions[GameAction[action_name]] = FrameHash(str(raw))
+                except (TypeError, ValueError):
+                    logger.warning(
+                        "Skipping transition for action %s due to invalid target %s",
+                        action_name,
+                        raw,
+                    )
+                    continue
+
+        level_payload = payload.get("level")
+        level: Optional[int] = None
+        if level_payload is not None:
             try:
-                transitions[GameAction[action_name]] = FrameHash(str(raw))
+                if isinstance(level_payload, (int, float)):
+                    level = int(level_payload)
+                else:
+                    level = int(str(level_payload))
             except (TypeError, ValueError):
-                logger.warning(
-                    "Skipping transition for action %s due to invalid target %s",
-                    action_name,
-                    raw,
-                )
-                continue
-        return cls(transitions)
+                logger.warning("Skipping invalid level entry %s", level_payload)
+        is_terminal = bool(payload.get("is_terminal", False))
+        is_game_over = bool(payload.get("is_game_over", False))
+        return cls(
+            transitions=transitions,
+            level=level,
+            is_terminal=is_terminal,
+            is_game_over=is_game_over,
+        )
 
 
-STATE_GRAPH = Dict[FrameHash, TransitionMap]
+STATE_GRAPH = Dict[FrameHash, StateRecord]
 
 
 @dataclass
@@ -95,22 +129,13 @@ class Memory:
     """Persistent navigation memory retained across runs."""
 
     state_graph: STATE_GRAPH = field(default_factory=dict)
-    level_terminal_states: Dict[int, FrameHash] = field(default_factory=dict)
-    game_over_states: Set[FrameHash] = field(default_factory=set)
 
     def to_dict(self) -> Dict[str, object]:
         return {
             "state_graph": {
                 str(state_hash): record.to_dict()
                 for state_hash, record in self.state_graph.items()
-            },
-            "terminal_states": {
-                str(level): str(state_hash)
-                for level, state_hash in self.level_terminal_states.items()
-            },
-            "game_over_states": [
-                str(state_hash) for state_hash in sorted(self.game_over_states, key=str)
-            ],
+            }
         }
 
     @classmethod
@@ -126,38 +151,43 @@ class Memory:
                     continue
                 if not isinstance(transitions, Mapping):
                     logger.warning(
-                        "Skipping state %s because transitions map is missing or malformed",
+                        "Skipping state %s because record payload is missing or malformed",
                         hash_str,
                     )
                     continue
-                memory.state_graph[state_hash] = TransitionMap.from_dict(transitions)
-        terminal_payload = payload.get("terminal_states", {})
-        if isinstance(terminal_payload, Mapping):
-            for level_str, raw_state in terminal_payload.items():
-                try:
-                    level = int(level_str)
-                    memory.level_terminal_states[level] = FrameHash(str(raw_state))
-                except (TypeError, ValueError):
-                    logger.warning(
-                        "Skipping invalid terminal entry %s -> %s",
-                        level_str,
-                        raw_state,
-                    )
-                    continue
-        game_over_payload = payload.get("game_over_states", [])
-        if isinstance(game_over_payload, (list, tuple, set)):
-            for raw_state in game_over_payload:
-                try:
-                    memory.game_over_states.add(FrameHash(str(raw_state)))
-                except (TypeError, ValueError):
-                    logger.warning(
-                        "Skipping invalid game-over entry %s",
-                        raw_state,
-                    )
-                    continue
-        elif game_over_payload:
-            logger.warning("game_over_states payload malformed; ignoring")
+                memory.state_graph[state_hash] = StateRecord.from_dict(transitions)
         return memory
+
+    def ensure_state(self, frame_hash: FrameHash) -> StateRecord:
+        record = self.state_graph.get(frame_hash)
+        if record is None:
+            record = StateRecord()
+            self.state_graph[frame_hash] = record
+        return record
+
+    def mark_game_over(self, frame_hash: FrameHash) -> None:
+        self.ensure_state(frame_hash).is_game_over = True
+
+    def mark_terminal(self, frame_hash: FrameHash, level: int) -> None:
+        for record in self.state_graph.values():
+            if record.level == level and record.is_terminal:
+                record.is_terminal = False
+        record = self.ensure_state(frame_hash)
+        record.level = level
+        record.is_terminal = True
+
+    def record_level(self, frame_hash: FrameHash, level: int) -> None:
+        record = self.ensure_state(frame_hash)
+        record.level = level
+
+    def terminal_for_level(self, level: int) -> Optional[FrameHash]:
+        for state_hash, record in self.state_graph.items():
+            if record.level == level and record.is_terminal:
+                return state_hash
+        return None
+
+    def game_over_hashes(self) -> Set[FrameHash]:
+        return {state_hash for state_hash, record in self.state_graph.items() if record.is_game_over}
 
 
 def load_memory(path: Path, *, logger_prefix: Optional[str] = None) -> Memory:

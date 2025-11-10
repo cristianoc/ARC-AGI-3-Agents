@@ -27,7 +27,6 @@ from .types import (
     Frame,
     FrameHash,
     Memory,
-    TransitionMap,
     load_memory,
     persist_metrics,
     save_memory,
@@ -97,7 +96,6 @@ class BaseAbstractionNavigator(Agent):
         self._nfr_planner = NearFrontierPlanner(
             arrow_actions=self.ARROW_ACTIONS,
             state_graph=self.memory.state_graph,
-            blocked_states=self.memory.game_over_states,
         )
         self._snapshots: deque[NavigatorSnapshot] = deque(maxlen=3)
 
@@ -131,9 +129,11 @@ class BaseAbstractionNavigator(Agent):
 
         prev_snapshot = self._snapshots[-2] if len(self._snapshots) >= 2 else None
 
+        self.memory.record_level(snapshot.frame_hash, snapshot.level)
+
         if snapshot.game_state is GameState.GAME_OVER:
             self._track_state_graph(prev_snapshot, snapshot)
-            self.memory.game_over_states.add(snapshot.frame_hash)
+            self.memory.mark_game_over(snapshot.frame_hash)
             logger.info("%s resetting after game over", self.game_id)
             self._reset_tracking()
             action = GameAction.RESET
@@ -154,7 +154,7 @@ class BaseAbstractionNavigator(Agent):
         else:
             self._track_state_graph(prev_snapshot, snapshot)
 
-        terminal_target = self.memory.level_terminal_states.get(snapshot.level)
+        terminal_target = self.memory.terminal_for_level(snapshot.level)
         nfr_action = self._nfr_planner.next_action(
             current_state=snapshot.frame_hash,
             available_actions=snapshot.available_actions,
@@ -184,7 +184,8 @@ class BaseAbstractionNavigator(Agent):
         """Persist the provided frame to an image for debugging."""
 
         frame = frame_data.frame[0]
-        return save_png(frame, out_path, PALETTE, scale=scale, grid=grid)
+        save_png(frame, out_path, PALETTE, scale=scale, grid=grid)
+        return out_path
 
     def _reset_tracking(self) -> None:
         self.last_action = None
@@ -329,6 +330,9 @@ class BaseAbstractionNavigator(Agent):
         snapshot: NavigatorSnapshot,
     ) -> None:
         self._record_state_visit(snapshot.frame_hash)
+        self.memory.record_level(snapshot.frame_hash, snapshot.level)
+        if prev_snapshot is not None:
+            self.memory.record_level(prev_snapshot.frame_hash, prev_snapshot.level)
 
         previous_state_hash = prev_snapshot.frame_hash if prev_snapshot else None
         if (
@@ -342,11 +346,7 @@ class BaseAbstractionNavigator(Agent):
         )
 
     def _record_state_visit(self, frame_hash: FrameHash) -> None:
-        state_graph = self.memory.state_graph
-        record = state_graph.get(frame_hash)
-        if record is None:
-            record = TransitionMap()
-            state_graph[frame_hash] = record
+        self.memory.ensure_state(frame_hash)
 
     def _record_state_transition(
         self,
@@ -354,17 +354,11 @@ class BaseAbstractionNavigator(Agent):
         action: GameAction,
         next_hash: FrameHash,
     ) -> None:
-        state_graph = self.memory.state_graph
-        transition_map = state_graph.get(previous_hash)
-        if transition_map is None:
-            transition_map = TransitionMap()
-            state_graph[previous_hash] = transition_map
-
-        if next_hash not in state_graph:
-            state_graph[next_hash] = TransitionMap()
-        existing = transition_map.transitions.get(action)
+        previous_record = self.memory.ensure_state(previous_hash)
+        self.memory.ensure_state(next_hash)
+        existing = previous_record.transitions.get(action)
         if existing is None:
-            transition_map.transitions[action] = next_hash
+            previous_record.transitions[action] = next_hash
             return
         if existing != next_hash:
             logger.warning(
@@ -380,7 +374,7 @@ class BaseAbstractionNavigator(Agent):
     ) -> None:
         level_completed = prev_snapshot.level
         terminal_hash = prev_snapshot.frame_hash
-        self.memory.level_terminal_states[level_completed] = terminal_hash
+        self.memory.mark_terminal(terminal_hash, level_completed)
         logger.info(
             "%s level advanced to %d at step %d",
             self.game_id,

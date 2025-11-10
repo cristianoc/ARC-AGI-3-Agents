@@ -102,7 +102,7 @@ def save_png(
     scale: int = 8,
     grid: int | None = None,
     grid_color: tuple[int, int, int] = (32, 32, 32),
-) -> None:
+) -> Path:
     """Save a single frame to PNG."""
 
     out = Path(out_path)
@@ -110,6 +110,7 @@ def save_png(
     if image is None:
         raise RuntimeError("Pillow unexpectedly unavailable during PNG export.")
     image.save(out)
+    return out
 
 
 def iter_frames_from_record(record_path: Path | str) -> Iterator[Frame]:

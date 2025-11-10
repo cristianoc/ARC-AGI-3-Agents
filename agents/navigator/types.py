@@ -196,6 +196,13 @@ class Memory:
 
     def record_level(self, frame_hash: FrameHash, level: int) -> None:
         record = self.ensure_state(frame_hash)
+        if record.level is not None and record.level != level:
+            logger.error(
+                "memory: level changed for %s from %d to %d",
+                frame_hash,
+                record.level,
+                level,
+            )
         record.level = level
 
     def terminal_for_level(self, level: int) -> Optional[FrameHash]:

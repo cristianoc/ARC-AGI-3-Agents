@@ -340,7 +340,9 @@ class BaseAbstractionNavigator(Agent):
         ):
             return
         self._record_state_transition(
-            previous_state_hash, self.last_action, snapshot.frame_hash
+            previous_state_hash,
+            self.last_action,
+            snapshot.frame_hash,
         )
 
     def _record_state_visit(self, frame_hash: FrameHash) -> None:
@@ -396,7 +398,7 @@ class BaseAbstractionNavigator(Agent):
         frame_hash: FrameHash,
     ) -> tuple[int, FrameHash]:
         if prev_snapshot is None:
-            return 1, frame_hash
+            return score + 1, frame_hash
 
         level = prev_snapshot.level
         level_start_state = prev_snapshot.level_start_state

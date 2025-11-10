@@ -19,6 +19,7 @@ import numpy as np
 from ..agent import Agent
 from ..structs import FrameData, GameAction, GameState
 from .abstractions import FrameAbstraction, AbstractionDetector
+from .frame_viewer import PALETTE, save_png
 from .grid_hash import FrameMask, hash_frame
 from .nfr_planner import NearFrontierPlanner
 from .types import (
@@ -171,6 +172,19 @@ class BaseAbstractionNavigator(Agent):
         elif nfr_action is GameAction.RESET:
             self.last_action = None
         return nfr_action
+
+    def export_frame(
+        self,
+        frame_data: FrameData,
+        out_path: Path,
+        *,
+        scale: int = 8,
+        grid: int | None = None,
+    ) -> Path:
+        """Persist the provided frame to an image for debugging."""
+
+        frame = frame_data.frame[0]
+        return save_png(frame, out_path, PALETTE, scale=scale, grid=grid)
 
     def _reset_tracking(self) -> None:
         self.last_action = None

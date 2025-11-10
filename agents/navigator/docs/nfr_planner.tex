@@ -19,7 +19,7 @@ Each play starts at a known level start state $s_0 \in S$. The navigator also tr
     \item $S_{\mathrm{disc}} \subseteq S$: discovered states from prior episodes.
     \item $T_{\mathrm{known}} : S_{\mathrm{disc}} \times A \to S_{\mathrm{disc}} \cup \{\bot\}$: the partial transition map recovered from experience (returning $\bot$ when a transition has not yet been seen).
     \item $A(s) \subseteq A$: actions the environment currently allows at state $s$.
-    \item Each discovered state keeps additional metadata indicating whether it is a terminal (level-completion) state or a failure (game-over) state. The planner uses these flags to skip failure nodes and to honour requested terminal targets.
+    \item Each discovered state keeps additional metadata indicating whether it is a terminal (level-completion) state, an initial level start, or a failure (game-over) state. The planner uses these flags to skip failure nodes and to honour requested terminal targets.
     \item $\mathcal{F} = \{\, s \in S_{\mathrm{disc}} \setminus S_{\mathrm{fail}} \mid \exists a \in A_{\mathrm{nav}} : T_{\mathrm{known}}(s,a) = \bot \,\}$, the \emph{frontier}: discovered states with at least one action in $A_{\mathrm{nav}}$ whose successor is unknown in $T_{\mathrm{known}}$.
 \end{itemize}
 

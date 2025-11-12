@@ -13,7 +13,6 @@ You must provide:
      - Implement `measure_energy(frame) -> EnergyHudMeasurement | None`.
      - It should detect the energy UI, returning:
          * `value`: current energy as a non-negative integer
-         * `capacity`: maximum energy (integer upper bound)
          * `mask`: a sequence of rectangles `(y0, y1, x0, x1)` that cover
            the HUD area(s). Use multiple rectangles if the HUD is disjoint.
      - Be resilient to transient frames. When no HUD is visible, return None.
@@ -110,10 +109,8 @@ def _measure_energy_ls20(frame: Frame) -> Optional[EnergyHudMeasurement]:
 
     Contract for the per-game implementation:
       - Input: `frame` is a 2D grid of cell values.
-      - Output (when the HUD is visible): `EnergyHudMeasurement(value, capacity, mask)`
+      - Output (when the HUD is visible): `EnergyHudMeasurement(value, mask)`
         with `mask` covering every `(y0, y1, x0, x1)` rectangle of the HUD.
-      - Robustness: Prefer returning a stable `capacity` even during brief HUD
-        occlusions. If no HUD is visible, return None.
     """
     row_index = 2
     if len(frame) <= row_index or not frame[row_index]:
@@ -134,23 +131,23 @@ def _measure_energy_ls20(frame: Frame) -> Optional[EnergyHudMeasurement]:
         elif blocks:
             break
 
-    total = len(blocks)
-    if total < 6:
-        return None
-
     if any(v not in (3, 15) for v in blocks):
         return None
 
     filled = sum(1 for v in blocks if v == 15)
-    return EnergyHudMeasurement(value=filled, capacity=total, mask=LS20_ENERGY_HUD_MASK)
+    return EnergyHudMeasurement(value=filled, mask=LS20_ENERGY_HUD_MASK)
 
 
 def _measure_energy_as66(frame: Frame) -> Optional[EnergyHudMeasurement]:
-    return EnergyHudMeasurement(
-        value=1,  # placeholder reading
-        capacity=4,  # placeholder capacity
-        mask=AS66_ENERGY_HUD_MASK,
-    )
+    """Detect energy by tallying orange tiles within the HUD mask corridors."""
+
+    value = 0
+    for rect in AS66_ENERGY_HUD_MASK:
+        for y in range(rect.y0, rect.y1 + 1):
+            for x in range(rect.x0, rect.x1 + 1):
+                if frame[y][x] == 12:
+                    value += 1
+    return EnergyHudMeasurement(value=value, mask=AS66_ENERGY_HUD_MASK)
 
 
 def _measure_energy_for_game(game_id: str) -> Callable[[Frame], Optional[EnergyHudMeasurement]]:

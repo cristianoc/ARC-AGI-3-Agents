@@ -28,7 +28,6 @@ from .types import (
     FrameHash,
     Memory,
     load_memory,
-    persist_metrics,
     save_memory,
 )
 
@@ -46,8 +45,7 @@ class NavigatorSnapshot:
     frame_hash: FrameHash
     score: int
     level: int
-    energy: Optional[EnergyHudMeasurement]
-    energy_capacity: Optional[int]
+    energy_measurement: Optional[EnergyHudMeasurement]
     level_start_state: FrameHash
     available_actions: list[GameAction]
     game_state: GameState
@@ -214,7 +212,6 @@ class BaseAbstractionNavigator(Agent):
         abstraction = FrameAbstraction(frame_hash=frame_hash, frame=frame)
         if energy_measurement is not None:
             abstraction.add("energy", energy_measurement)
-        energy_capacity = energy_measurement.capacity if energy_measurement else None
 
         for name, detector in self._user_abstractions:
             try:
@@ -241,8 +238,7 @@ class BaseAbstractionNavigator(Agent):
             frame_hash=frame_hash,
             score=frame_data.score,
             level=level,
-            energy=energy_measurement,
-            energy_capacity=energy_capacity,
+            energy_measurement=energy_measurement,
             level_start_state=level_start_state,
             available_actions=frame_data.available_actions,
             game_state=frame_data.state,
@@ -308,17 +304,7 @@ class BaseAbstractionNavigator(Agent):
             self.game_id,
             known_states_total,
         )
-
         save_memory(self.memory, MEMORY_PATH)
-
-        persist_metrics(
-            recorder=getattr(self, "recorder", None),
-            game_id=self.game_id,
-            agent_name=self.name,
-            known_states_total=known_states_total,
-            energy_capacity=self._snapshots[-1].energy_capacity if self._snapshots else None,
-        )
-
         super().cleanup(scorecard)
 
     def _track_state_graph(
@@ -326,7 +312,7 @@ class BaseAbstractionNavigator(Agent):
         prev_snapshot: Optional[NavigatorSnapshot],
         snapshot: NavigatorSnapshot,
     ) -> None:
-        self._record_state_visit(snapshot.frame_hash)
+        self._record_state_visit(snapshot)
         self.memory.record_level(snapshot.frame_hash, snapshot.level)
 
         previous_state_hash = prev_snapshot.frame_hash if prev_snapshot else None
@@ -342,8 +328,24 @@ class BaseAbstractionNavigator(Agent):
             snapshot.frame_hash,
         )
 
-    def _record_state_visit(self, frame_hash: FrameHash) -> None:
-        self.memory.ensure_state(frame_hash)
+    def _record_state_visit(self, snapshot: NavigatorSnapshot) -> None:
+        record = self.memory.ensure_state(snapshot.frame_hash)
+        energy_measurement = snapshot.energy_measurement
+        if energy_measurement is None:
+            return
+        old_energy = record.energy
+        new_energy = energy_measurement.value
+        if old_energy is None:
+            record.energy = new_energy
+        else:
+            if old_energy < energy_measurement.value:
+                logger.info(
+                    "memory: energy increased for %s from %d to %d",
+                    snapshot.frame_hash,
+                    old_energy,
+                    energy_measurement.value,
+                )
+                record.energy = new_energy
 
     def _record_state_transition(
         self,

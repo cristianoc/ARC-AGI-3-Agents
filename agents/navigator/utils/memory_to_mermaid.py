@@ -38,6 +38,16 @@ def _sorted_levels(levels: Dict[Any, List[str]]) -> Iterable[Tuple[Any, List[str
     return sorted(levels.items(), key=key)
 
 
+def _escape_label(label: str) -> str:
+    return label.replace('"', "&quot;")
+
+
+def _format_node_label(state: str, record: Dict[str, Any]) -> str:
+    energy = record.get("energy")
+    energy_text = f"E={energy}"
+    return f"{state}<br/>{energy_text}"
+
+
 def memory_to_mermaid(memory_payload: Dict[str, Any]) -> str:
     """Generate a Mermaid graph from a memory payload."""
     state_graph: Dict[str, Dict[str, Any]] = memory_payload.get("state_graph", {})
@@ -75,12 +85,14 @@ def memory_to_mermaid(memory_payload: Dict[str, Any]) -> str:
         mermaid_lines.append(f"    subgraph {label}")
         for state in sorted(nodes):
             node_id = _sanitize_node_id(state)
+            record = state_graph.get(state, {})
+            label = _escape_label(_format_node_label(state, record))
             if state in initial_states:
-                mermaid_lines.append(f"        {node_id}(\"{state}\")")
+                mermaid_lines.append(f"        {node_id}(\"{label}\")")
             elif state in terminal_states:
-                mermaid_lines.append(f"        {node_id}((\"{state}\"))")
+                mermaid_lines.append(f"        {node_id}((\"{label}\"))")
             else:
-                mermaid_lines.append(f"        {node_id}[\"{state}\"]")
+                mermaid_lines.append(f"        {node_id}[\"{label}\"]")
 
             classes: list[str] = ["defaultLevel"]
             if state in initial_states:
@@ -104,11 +116,11 @@ def memory_to_mermaid(memory_payload: Dict[str, Any]) -> str:
         for state in sorted(missing_states):
             node_id = _sanitize_node_id(state)
             if state in initial_states:
-                mermaid_lines.append(f"        {node_id}(\"{state}\")")
+                mermaid_lines.append(f"        {node_id}(\"{_escape_label(state)}\")")
             elif state in terminal_states:
-                mermaid_lines.append(f"        {node_id}((\"{state}\"))")
+                mermaid_lines.append(f"        {node_id}((\"{_escape_label(state)}\"))")
             else:
-                mermaid_lines.append(f"        {node_id}[\"{state}\"]")
+                mermaid_lines.append(f"        {node_id}[\"{_escape_label(state)}\"]")
             classes = ["defaultLevel"]
             if state in initial_states:
                 classes.append("initial")

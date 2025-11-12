@@ -30,12 +30,10 @@ class EnergyHudMeasurement:
     """Structured representation of an energy HUD value.
 
     The energy is represented as a non-negative integer `value` with an
-    optional `capacity` upper bound and the HUD mask geometry. If the HUD spans
-    disjoint regions, include every rectangle that belongs to the HUD.
+    the HUD mask geometry. If the HUD spans disjoint regions, include every rectangle that belongs to the HUD.
     """
 
     value: int
-    capacity: int
     mask: Sequence["MaskRect"]
     """Rectangles describing every pixel that belongs to the energy HUD.
 
@@ -43,15 +41,6 @@ class EnergyHudMeasurement:
     is reused for frame hashing so that HUD redraws do not affect state identity.
     """
 
-    @property
-    def empty_blocks(self) -> int:
-        return max(self.capacity - self.value, 0)
-
-    @property
-    def fill_ratio(self) -> float:
-        if self.capacity == 0:
-            return 0.0
-        return self.value / self.capacity
 
     # Backwards compatibility: expose `filled_blocks` as an alias for `value`.
     @property
@@ -65,6 +54,7 @@ class StateRecord:
 
     transitions: Dict[GameAction, FrameHash] = field(default_factory=dict)
     level: Optional[int] = None
+    energy: Optional[int] = None
     is_initial: bool = False
     is_terminal: bool = False
     is_game_over: bool = False
@@ -77,6 +67,8 @@ class StateRecord:
         }
         if self.level is not None:
             payload["level"] = self.level
+        if self.energy is not None:
+            payload["energy"] = self.energy
         if self.is_initial:
             payload["is_initial"] = True
         if self.is_terminal:
@@ -104,22 +96,25 @@ class StateRecord:
                     )
                     continue
 
-        level_payload = payload.get("level")
+        raw_level = payload.get("level")
         level: Optional[int] = None
-        if level_payload is not None:
-            try:
-                if isinstance(level_payload, (int, float)):
-                    level = int(level_payload)
-                else:
-                    level = int(str(level_payload))
-            except (TypeError, ValueError):
-                logger.warning("Skipping invalid level entry %s", level_payload)
+        if isinstance(raw_level, int):
+            level = raw_level
+        elif raw_level is not None:
+            logger.warning("Skipping invalid level entry %s", raw_level)
         is_initial = bool(payload.get("is_initial", False))
         is_terminal = bool(payload.get("is_terminal", False))
         is_game_over = bool(payload.get("is_game_over", False))
+        energy: Optional[int] = None
+        raw_energy = payload.get("energy")
+        if isinstance(raw_energy, int):
+            energy = raw_energy
+        elif raw_energy is not None:
+            logger.warning("Skipping invalid energy entry %s", raw_energy)
         return cls(
             transitions=transitions,
             level=level,
+            energy=energy,
             is_initial=is_initial,
             is_terminal=is_terminal,
             is_game_over=is_game_over,
@@ -246,25 +241,3 @@ def load_memory(path: Path, *, logger_prefix: Optional[str] = None) -> Memory:
 def save_memory(memory: Memory, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(memory.to_dict(), indent=2))
-
-
-def persist_metrics(
-    *,
-    recorder: Any,
-    game_id: str,
-    agent_name: str,
-    known_states_total: int,
-    energy_capacity: Optional[int],
-) -> None:
-    if not recorder or not getattr(recorder, "filename", None):
-        return
-    target_path = Path(recorder.filename).with_suffix(".tracking.json")
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "game_id": game_id,
-        "agent": agent_name,
-        "known_states_total": known_states_total,
-        "energy_capacity": energy_capacity,
-    }
-    with target_path.open("w", encoding="utf-8") as fh:
-        json.dump(payload, fh, indent=2)

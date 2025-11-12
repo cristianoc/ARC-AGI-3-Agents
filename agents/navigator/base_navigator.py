@@ -158,6 +158,27 @@ class BaseAbstractionNavigator(Agent):
             return action
         self._track_state_graph(prev_snapshot, snapshot)
 
+        state_record = self.memory.state_graph.get(snapshot.frame_hash)
+        if state_record is not None and state_record.is_terminal:
+            next_level = snapshot.level + 1
+            next_level_start = self.memory.initial_for_level(next_level)
+            if next_level_start is not None:
+                for action, target_hash in state_record.transitions.items():
+                    if target_hash == next_level_start:
+                        logger.info(
+                            "%s terminal transition reused: action=%s next_level=%d target=%s",
+                            self.game_id,
+                            action.name,
+                            next_level,
+                            next_level_start,
+                        )
+                        action.reasoning = "terminal-transition"
+                        if action in self.ARROW_ACTIONS:
+                            self.last_action = action
+                        else:
+                            self.last_action = None
+                        return action
+
         terminal_target = self.memory.terminal_for_level(snapshot.level)
         nfr_action = self._nfr_planner.next_action(
             current_state=snapshot.frame_hash,

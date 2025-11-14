@@ -23,7 +23,7 @@ class Color(IntEnum):
 
     BRIGHT_WHITE = 0
     BRIGHT_GREEN = 1
-    LIGHT_BLUE = 2
+    WARM_GREY = 2
     MEDIUM_GREY = 3
     DARK_GREY = 4
     VERY_DARK_GREY = 5
@@ -43,7 +43,7 @@ class Color(IntEnum):
 PALETTE: list[tuple[int, int, int]] = [
     (240, 240, 240),   # 0 - bright white
     (96, 224, 64),     # 1 - bright green
-    (120, 196, 228),   # 2 - light blue
+    (153, 153, 152),   # 2 - warm grey
     (101, 102, 101),   # 3 - medium grey
     (50, 51, 50),      # 4 - dark grey
     (40, 40, 40),      # 5 - very dark grey

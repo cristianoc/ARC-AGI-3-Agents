@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
+from enum import IntEnum
 from pathlib import Path
 from typing import NamedTuple, Any, Dict, Mapping, NewType, Optional, Sequence, Set
 
@@ -15,6 +16,48 @@ logger = logging.getLogger(__name__)
 FrameHash = NewType("FrameHash", str)
 
 Frame = list[list[int]] # 64x64
+
+
+class Color(IntEnum):
+    """16-color palette for ARC-AGI-3 frames."""
+
+    BRIGHT_WHITE = 0
+    BRIGHT_GREEN = 1
+    LIGHT_BLUE = 2
+    MEDIUM_GREY = 3
+    DARK_GREY = 4
+    VERY_DARK_GREY = 5
+    MAGENTA_PINK = 6
+    BRIGHT_YELLOW = 7
+    CORAL_RED = 8
+    MEDIUM_BLUE = 9
+    SKY_BLUE = 10
+    YELLOW = 11
+    ORANGE = 12
+    DARK_RED_MAROON = 13
+    LIGHT_GREY = 14
+    PURPLE = 15
+
+
+# 16-colour palette as RGB tuples.
+PALETTE: list[tuple[int, int, int]] = [
+    (240, 240, 240),   # 0 - bright white
+    (96, 224, 64),     # 1 - bright green
+    (120, 196, 228),   # 2 - light blue
+    (101, 102, 101),   # 3 - medium grey
+    (50, 51, 50),      # 4 - dark grey
+    (40, 40, 40),      # 5 - very dark grey
+    (210, 63, 159),    # 6 - magenta/pink
+    (255, 220, 64),    # 7 - bright yellow
+    (229, 77, 61),     # 8 - coral red
+    (71, 144, 248),    # 9 - medium blue
+    (154, 214, 238),   # 10 - sky blue
+    (248, 221, 74),    # 11 - yellow
+    (255, 132, 0),     # 12 - orange
+    (134, 33, 51),     # 13 - dark red/maroon
+    (214, 214, 214),   # 14 - light grey
+    (153, 90, 208),    # 15 - purple
+]
 
 class MaskRect(NamedTuple):
     """Inclusive rectangle specified as (y0, y1, x0, x1)."""

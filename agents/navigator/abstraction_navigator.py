@@ -30,7 +30,7 @@ from typing import Any, Callable, Optional
 from ..agent import Agent
 from .abstractions import USER_ABSTRACTIONS
 from .base_navigator import BaseAbstractionNavigator
-from .types import EnergyHudMeasurement, Frame, MaskRect
+from .types import Color, EnergyHudMeasurement, Frame, MaskRect
 
 # ---------------------------------------------------------------------------
 # Game-specific abstractions
@@ -66,7 +66,7 @@ def detect_player(frame_cells: Frame) -> Optional[PlayerDetection]:
     positions: list[tuple[int, int]] = []
     for y, row in enumerate(frame_cells):
         for x, cell in enumerate(row):
-            if cell == 12:
+            if cell == Color.ORANGE:
                 positions.append((y, x))
 
     if not positions or len(positions) > 256:
@@ -126,15 +126,15 @@ def _measure_energy_ls20(frame: Frame) -> Optional[EnergyHudMeasurement]:
     blocks: list[int] = []
     for x in range(x0, upper_x + 1, 2):
         value = row[x]
-        if value in (3, 15):
+        if value in (Color.MEDIUM_GREY, Color.PURPLE):
             blocks.append(value)
         elif blocks:
             break
 
-    if any(v not in (3, 15) for v in blocks):
+    if any(v not in (Color.MEDIUM_GREY, Color.PURPLE) for v in blocks):
         return None
 
-    filled = sum(1 for v in blocks if v == 15)
+    filled = sum(1 for v in blocks if v == Color.PURPLE)
     return EnergyHudMeasurement(value=filled, mask=LS20_ENERGY_HUD_MASK)
 
 
@@ -145,7 +145,7 @@ def _measure_energy_as66(frame: Frame) -> Optional[EnergyHudMeasurement]:
     for rect in AS66_ENERGY_HUD_MASK:
         for y in range(rect.y0, rect.y1 + 1):
             for x in range(rect.x0, rect.x1 + 1):
-                if frame[y][x] == 12:
+                if frame[y][x] == Color.ORANGE:
                     value += 1
     return EnergyHudMeasurement(value=value, mask=AS66_ENERGY_HUD_MASK)
 

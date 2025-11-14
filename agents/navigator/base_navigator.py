@@ -19,7 +19,7 @@ import numpy as np
 from ..agent import Agent
 from ..structs import FrameData, GameAction, GameState
 from .abstractions import FrameAbstraction, AbstractionDetector
-from .frame_viewer import PALETTE, save_png
+from .frame_viewer import save_png
 from .grid_hash import FrameMask, hash_frame
 from .nfr_planner import NearFrontierPlanner
 from .types import (

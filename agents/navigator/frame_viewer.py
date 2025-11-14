@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional, Sequence, TYPE_CHECKING, cast
 
-from .types import Frame
+from .types import Frame, PALETTE
 
 if TYPE_CHECKING:  # pragma: no cover - for type checkers only
     from PIL.Image import Image as PILImage
@@ -20,26 +20,6 @@ else:
 
 import PIL.Image as pil_image_module
 import PIL.ImageDraw as pil_image_draw_module
-
-# 16-colour palette as RGB tuples.
-PALETTE: list[tuple[int, int, int]] = [
-    (240, 240, 240),   # 0 - bright white
-    (96, 224, 64),     # 1 - bright green
-    (120, 196, 228),   # 2 - light blue
-    (101, 102, 101),   # 3 - medium grey
-    (50, 51, 50),      # 4 - dark grey
-    (40, 40, 40),      # 5 - very dark grey
-    (210, 63, 159),    # 6 - magenta/pink
-    (255, 220, 64),    # 7 - bright yellow
-    (229, 77, 61),     # 8 - coral red
-    (71, 144, 248),    # 9 - medium blue
-    (154, 214, 238),   # 10 - sky blue
-    (248, 221, 74),    # 11 - yellow
-    (255, 132, 0),     # 12 - orange
-    (134, 33, 51),     # 13 - dark red/maroon
-    (214, 214, 214),   # 14 - light grey
-    (153, 90, 208),    # 15 - purple
-]
 
 def _assert_frame_shape(frame: Frame) -> None:
     if len(frame) != 64:

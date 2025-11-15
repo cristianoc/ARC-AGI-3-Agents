@@ -31,7 +31,6 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 from ..agent import Agent
-from ..structs import GameAction
 from .abstractions import USER_ABSTRACTIONS, AbstractionDetector
 from .base_navigator import BaseAbstractionNavigator
 from .types import Color, EnergyHudMeasurement, Frame, MaskRect
@@ -66,15 +65,7 @@ class PlayerDetection:
     bbox: BoundingBox
 
 
-@dataclass(frozen=True)
-class ClickableSquare:
-    """Represents a 4x4 clickable square."""
-
-    top_left: tuple[int, int]  # (y, x)
-    color: Color
-    bbox: BoundingBox
-
-def detect_clickable_squares_vc33(frame: Frame) -> list[ClickableSquare]:
+def detect_clickable_squares_vc33(frame: Frame) -> list[tuple[int, int]]:
     """Detect 4x4 blue and red clickable squares in the frame."""
 
     if len(frame) < 4 or len(frame[-1]) < 4:
@@ -86,7 +77,7 @@ def detect_clickable_squares_vc33(frame: Frame) -> list[ClickableSquare]:
     if windows.size == 0:
         return []
 
-    squares: list[ClickableSquare] = []
+    coords: list[tuple[int, int]] = []
     seen: set[tuple[int, int]] = set()
     color_groups = (
         (Color.MEDIUM_BLUE, Color.SKY_BLUE),
@@ -102,29 +93,10 @@ def detect_clickable_squares_vc33(frame: Frame) -> list[ClickableSquare]:
             if (y, x) in seen:
                 continue
             seen.add((y, x))
-            color_value = Color(int(array[y, x]))
-            bbox = BoundingBox(min_y=y, max_y=y + 3, min_x=x, max_x=x + 3)
-            squares.append(ClickableSquare(top_left=(y, x), color=color_value, bbox=bbox))
-    return squares
+            _ = Color(int(array[y, x]))
+            coords.append((int(x), int(y)))
 
-
-def generate_click_actions(frame: Frame, game_id: str) -> list[GameAction]:
-    """Create ACTION6 commands for every detected clickable square."""
-
-    if not game_id.startswith("vc33"):
-        return []
-
-    squares = detect_clickable_squares_vc33(frame)
-
-    actions: list[GameAction] = []
-
-    for square in squares:
-        y, x = square.top_left
-        action = GameAction.ACTION6.clone()
-        action.set_data({"game_id": game_id, "x": x, "y": y})
-        actions.append(action)
-
-    return actions
+    return coords
 
 
 def detect_player(frame_cells: Frame) -> Optional[PlayerDetection]:

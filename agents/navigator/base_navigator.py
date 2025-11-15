@@ -409,11 +409,28 @@ class BaseAbstractionNavigator(Agent):
 def _click_actions_for_snapshot(
     snapshot: NavigatorSnapshot, game_id: str
 ) -> Optional[list[GameAction]]:
-    frame_layers = getattr(snapshot.frame, "frame", None)
-    if not frame_layers:
+    clickable_data = snapshot.abstraction.get("clickable")
+    if not clickable_data:
         return None
-    latest_frame = frame_layers[-1]
-    from .abstraction_navigator import generate_click_actions
 
-    actions = generate_click_actions(latest_frame, game_id)
-    return actions if actions else None
+    actions = _generate_click_actions(clickable_data, game_id)
+    return actions
+
+
+def _generate_click_actions(
+    clickable_data: Sequence[tuple[int, int]], game_id: str
+) -> list[GameAction]:
+    """Convert abstraction-provided coordinates into actionable clicks."""
+
+    actions: list[GameAction] = []
+    seen: set[tuple[int, int]] = set()
+
+    for x, y in clickable_data:
+        if (x, y) in seen:
+            continue
+        seen.add((x, y))
+        action = GameAction.ACTION6.clone()
+        action.set_data({"game_id": game_id, "x": x, "y": y})
+        actions.append(action)
+
+    return actions

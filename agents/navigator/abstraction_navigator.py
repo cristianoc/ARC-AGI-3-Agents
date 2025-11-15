@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """AbstractionNavigator (game-specific wrapper).
 
 This module is your starting point to configure per-game abstractions for the
@@ -24,11 +22,17 @@ You must provide:
 
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
+
 from ..agent import Agent
-from .abstractions import USER_ABSTRACTIONS
+from ..structs import GameAction
+from .abstractions import USER_ABSTRACTIONS, AbstractionDetector
 from .base_navigator import BaseAbstractionNavigator
 from .types import Color, EnergyHudMeasurement, Frame, MaskRect
 
@@ -60,6 +64,67 @@ class PlayerDetection:
     center: tuple[float, float]
     pixel_count: int
     bbox: BoundingBox
+
+
+@dataclass(frozen=True)
+class ClickableSquare:
+    """Represents a 4x4 clickable square."""
+
+    top_left: tuple[int, int]  # (y, x)
+    color: Color
+    bbox: BoundingBox
+
+def detect_clickable_squares_vc33(frame: Frame) -> list[ClickableSquare]:
+    """Detect 4x4 blue and red clickable squares in the frame."""
+
+    if len(frame) < 4 or len(frame[-1]) < 4:
+        return []
+
+    array = np.asarray(frame, dtype=np.int16)
+    windows = sliding_window_view(array, (4, 4))
+
+    if windows.size == 0:
+        return []
+
+    squares: list[ClickableSquare] = []
+    seen: set[tuple[int, int]] = set()
+    color_groups = (
+        (Color.MEDIUM_BLUE, Color.SKY_BLUE),
+        (Color.CORAL_RED, Color.DARK_RED_MAROON),
+    )
+
+    for group in color_groups:
+        combined_mask = np.zeros(windows.shape[:2], dtype=bool)
+        for color in group:
+            combined_mask |= np.all(windows == int(color), axis=(-2, -1))
+        ys, xs = np.where(combined_mask)
+        for y, x in zip(ys, xs):
+            if (y, x) in seen:
+                continue
+            seen.add((y, x))
+            color_value = Color(int(array[y, x]))
+            bbox = BoundingBox(min_y=y, max_y=y + 3, min_x=x, max_x=x + 3)
+            squares.append(ClickableSquare(top_left=(y, x), color=color_value, bbox=bbox))
+    return squares
+
+
+def generate_click_actions(frame: Frame, game_id: str) -> list[GameAction]:
+    """Create ACTION6 commands for every detected clickable square."""
+
+    if not game_id.startswith("vc33"):
+        return []
+
+    squares = detect_clickable_squares_vc33(frame)
+
+    actions: list[GameAction] = []
+
+    for square in squares:
+        y, x = square.top_left
+        action = GameAction.ACTION6.clone()
+        action.set_data({"game_id": game_id, "x": x, "y": y})
+        actions.append(action)
+
+    return actions
 
 
 def detect_player(frame_cells: Frame) -> Optional[PlayerDetection]:
@@ -102,6 +167,7 @@ AS66_ENERGY_HUD_MASK: tuple[MaskRect, ...] = (
     MaskRect(y0=0, y1=63, x0=0, x1=0),   # left border column
     MaskRect(y0=0, y1=63, x0=63, x1=63), # right border column
 )
+VC33_ENERGY_HUD_MASK: tuple[MaskRect, ...] = (MaskRect(y0=0, y1=0, x0=0, x1=63),)
 
 
 def _measure_energy_ls20(frame: Frame) -> Optional[EnergyHudMeasurement]:
@@ -150,11 +216,22 @@ def _measure_energy_as66(frame: Frame) -> Optional[EnergyHudMeasurement]:
     return EnergyHudMeasurement(value=value, mask=AS66_ENERGY_HUD_MASK)
 
 
+def _measure_energy_vc33(frame: Frame) -> Optional[EnergyHudMeasurement]:
+    """Energy decreases as bright white pixels overwrite the top row from the right."""
+
+    top_row = frame[-1]
+    white_pixels = sum(1 for value in top_row if value == Color.BRIGHT_WHITE)
+    energy_value = 64 - white_pixels
+    return EnergyHudMeasurement(value=energy_value, mask=VC33_ENERGY_HUD_MASK)
+
+
 def _measure_energy_for_game(game_id: str) -> Callable[[Frame], Optional[EnergyHudMeasurement]]:
     if game_id.startswith("ls20"):
         return _measure_energy_ls20
     if game_id.startswith("as66"):
         return _measure_energy_as66
+    if game_id.startswith("vc33"):
+        return _measure_energy_vc33
     return lambda frame: None
 
 
@@ -165,6 +242,15 @@ USER_ABSTRACTIONS.extend(
         ("player", detect_player),
     ]
 )
+
+
+def _user_abstractions_for_game(
+    game_id: str,
+) -> list[tuple[str, AbstractionDetector]]:
+    abstractions = list(USER_ABSTRACTIONS)
+    if game_id.startswith("vc33"):
+        abstractions.append(("clickable", detect_clickable_squares_vc33))
+    return abstractions
 
 
 class AbstractionNavigator(BaseAbstractionNavigator, Agent):
@@ -178,10 +264,11 @@ class AbstractionNavigator(BaseAbstractionNavigator, Agent):
         game_id = str(kwargs.get("game_id", ""))
 
         measure_energy = _measure_energy_for_game(game_id)
+        user_abstractions = _user_abstractions_for_game(game_id)
 
         super().__init__(
             *args,
-            user_abstractions=USER_ABSTRACTIONS,
+            user_abstractions=user_abstractions,
             measure_energy=measure_energy,
             **kwargs,
         )
@@ -191,9 +278,11 @@ class AbstractionNavigatorNoEnergy(BaseAbstractionNavigator, Agent):
     """Variant of the navigator that disables energy measurement entirely."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        game_id = str(kwargs.get("game_id", ""))
+        user_abstractions = _user_abstractions_for_game(game_id)
         super().__init__(
             *args,
-            user_abstractions=USER_ABSTRACTIONS,
+            user_abstractions=user_abstractions,
             measure_energy=lambda frame: None,
             **kwargs,
         )

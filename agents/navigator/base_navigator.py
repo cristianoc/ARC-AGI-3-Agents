@@ -27,8 +27,10 @@ from .types import (
     Frame,
     FrameHash,
     Memory,
+    action_from_transition_key,
     load_memory,
     save_memory,
+    transition_key_from_action,
 )
 
 logger = logging.getLogger()
@@ -92,7 +94,6 @@ class BaseAbstractionNavigator(Agent):
 
         self.memory: Memory = load_memory(MEMORY_PATH, logger_prefix=self.game_id)
         self._nfr_planner = NearFrontierPlanner(
-            arrow_actions=self.ARROW_ACTIONS,
             state_graph=self.memory.state_graph,
         )
         self._snapshots: deque[NavigatorSnapshot] = deque(maxlen=3)
@@ -161,8 +162,9 @@ class BaseAbstractionNavigator(Agent):
             next_level = snapshot.level + 1
             next_level_start = self.memory.initial_for_level(next_level)
             if next_level_start is not None:
-                for action, target_hash in state_record.transitions.items():
+                for action_key, target_hash in state_record.transitions.items():
                     if target_hash == next_level_start:
+                        action = action_from_transition_key(action_key)
                         logger.info(
                             "%s terminal transition reused: action=%s next_level=%d target=%s",
                             self.game_id,
@@ -177,13 +179,19 @@ class BaseAbstractionNavigator(Agent):
                             self.last_action = None
                         return action
 
+        click_actions = _click_actions_for_snapshot(snapshot, self.game_id)
+        candidate_actions: list[GameAction] = (
+            click_actions if click_actions is not None else snapshot.available_actions
+        )
+
         terminal_target = self.memory.terminal_for_level(snapshot.level)
         nfr_action = self._nfr_planner.next_action(
             current_state=snapshot.frame_hash,
-            available_actions=snapshot.available_actions,
+            available_actions=candidate_actions,
             level_start_state=snapshot.level_start_state,
             target_state=terminal_target,
         )
+
         if nfr_action is None:
             action = GameAction.RESET
             action.reasoning = "nfr-fallback-reset"
@@ -194,8 +202,9 @@ class BaseAbstractionNavigator(Agent):
             self.last_action = nfr_action
         elif nfr_action is GameAction.RESET:
             self.last_action = None
+        else:
+            self.last_action = nfr_action
         return nfr_action
-
 
     def _reset_tracking(self) -> None:
         self.last_action = None
@@ -289,9 +298,7 @@ class BaseAbstractionNavigator(Agent):
         )
 
     @staticmethod
-    def _layer_difference_ratio(
-        layer_a: Frame, layer_b: Frame
-    ) -> float:
+    def _layer_difference_ratio(layer_a: Frame, layer_b: Frame) -> float:
         arr_a = np.asarray(layer_a)
         arr_b = np.asarray(layer_b)
         diff = np.count_nonzero(arr_a != arr_b)
@@ -355,9 +362,10 @@ class BaseAbstractionNavigator(Agent):
     ) -> None:
         previous_record = self.memory.ensure_state(previous_hash)
         self.memory.ensure_state(next_hash)
-        existing = previous_record.transitions.get(action)
+        key = transition_key_from_action(action)
+        existing = previous_record.transitions.get(key)
         if existing is None:
-            previous_record.transitions[action] = next_hash
+            previous_record.transitions[key] = next_hash
             return
         if existing != next_hash:
             logger.warning(
@@ -396,3 +404,16 @@ class BaseAbstractionNavigator(Agent):
         if prev_snapshot is None or level != prev_snapshot.level:
             return level, frame_hash
         return level, prev_snapshot.level_start_state
+
+
+def _click_actions_for_snapshot(
+    snapshot: NavigatorSnapshot, game_id: str
+) -> Optional[list[GameAction]]:
+    frame_layers = getattr(snapshot.frame, "frame", None)
+    if not frame_layers:
+        return None
+    latest_frame = frame_layers[-1]
+    from .abstraction_navigator import generate_click_actions
+
+    actions = generate_click_actions(latest_frame, game_id)
+    return actions if actions else None

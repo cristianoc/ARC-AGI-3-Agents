@@ -8,7 +8,12 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..structs import GameAction
-from .types import FrameHash, STATE_GRAPH
+from .types import (
+    FrameHash,
+    STATE_GRAPH,
+    action_from_transition_key,
+    transition_key_from_action,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -19,10 +24,8 @@ class NearFrontierPlanner:
     def __init__(
         self,
         *,
-        arrow_actions: Sequence[GameAction],
         state_graph: STATE_GRAPH,
     ) -> None:
-        self._arrow_actions = list(arrow_actions)
         self._state_graph = state_graph
 
     def next_action(
@@ -34,11 +37,7 @@ class NearFrontierPlanner:
         target_state: Optional[FrameHash] = None,
     ) -> Optional[GameAction]:
 
-        available_set = set(available_actions)
-        if not available_set:
-            return None
-
-        adj = self._build_adj()
+        adj = self._build_adj(available_actions)
         s0 = level_start_state
         if target_state is not None and self._is_blocked(target_state):
             target_state = None
@@ -55,7 +54,7 @@ class NearFrontierPlanner:
 
         INF = 10**9
         best: Optional[Tuple[int, int, FrameHash]] = None
-        for state in self._frontier_states():
+        for state in self._frontier_states(available_actions):
             d_current = dist_c.get(state, INF)
             d_reset = dist_s0.get(state, INF)
             frontier_cost = min(d_current, 1 + d_reset)
@@ -95,9 +94,7 @@ class NearFrontierPlanner:
             return action
 
         # Already at the chosen frontier: probe the first unseen arrow action that is available.
-        for action in self._arrow_actions:
-            if action not in available_set:
-                continue
+        for action in available_actions:
             if self._is_action_known(current_state, action):
                 continue
             action.reasoning = f"nfr-probe:{action.name.lower()}"
@@ -117,16 +114,18 @@ class NearFrontierPlanner:
                 states.add(target)
         return states
 
-    def _build_adj(self) -> Dict[FrameHash, List[Tuple[FrameHash, GameAction]]]:
+    def _build_adj(self, available_actions: Sequence[GameAction]) -> Dict[FrameHash, List[Tuple[FrameHash, GameAction]]]:
         adjacency: Dict[FrameHash, List[Tuple[FrameHash, GameAction]]] = {}
+        available_keys = {transition_key_from_action(action) for action in available_actions}
         for state, record in self._state_graph.items():
             if record.is_game_over:
                 continue
-            for action, target in record.transitions.items():
-                if action not in self._arrow_actions:
+            for action_key, target in record.transitions.items():
+                if action_key not in available_keys:
                     continue
                 if self._is_blocked(target):
                     continue
+                action = action_from_transition_key(action_key)
                 adjacency.setdefault(state, []).append((target, action))
         return adjacency
 
@@ -166,11 +165,11 @@ class NearFrontierPlanner:
         actions.reverse()
         return actions
 
-    def _frontier_states(self) -> Iterable[FrameHash]:
+    def _frontier_states(self, available_actions: Sequence[GameAction]) -> Iterable[FrameHash]:
         for state in self._discovered_states():
             if self._is_blocked(state):
                 continue
-            for action in self._arrow_actions:
+            for action in available_actions:
                 if not self._is_action_known(state, action):
                     yield state
                     break
@@ -179,7 +178,8 @@ class NearFrontierPlanner:
         record = self._state_graph.get(state)
         if record is None:
             return False
-        return action in record.transitions
+        key = transition_key_from_action(action)
+        return key in record.transitions
 
     def _is_blocked(self, state: FrameHash) -> bool:
         record = self._state_graph.get(state)

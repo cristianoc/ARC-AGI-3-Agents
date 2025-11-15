@@ -82,7 +82,7 @@ class Agent(ABC):
             if frame := self.take_action(action):
                 self.append_frame(frame)
                 logger.info(
-                    f"{self.game_id} - {action.name}: count {self.action_counter}, levels completed {frame.levels_completed}, avg fps {self.fps})"
+                    f"{self.game_id} - {action}: count {self.action_counter}, levels completed {frame.levels_completed}, avg fps {self.fps})"
                 )
             self.action_counter += 1
 

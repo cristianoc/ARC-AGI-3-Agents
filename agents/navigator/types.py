@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import NamedTuple, Any, Dict, Mapping, NewType, Optional, Sequence, Set
+from typing import Dict, Mapping, NamedTuple, NewType, Optional, Sequence, Set, Tuple
 
 from ..structs import GameAction
 
@@ -16,6 +16,41 @@ logger = logging.getLogger(__name__)
 FrameHash = NewType("FrameHash", str)
 
 Frame = list[list[int]] # 64x64
+
+
+def transition_key_from_action(action: GameAction) -> str:
+    """Serialize an action (including coordinates for ACTION6) into a key."""
+
+    if action.name == "ACTION6":
+        data = getattr(action, "action_data", None)
+        x = getattr(data, "x", None)
+        y = getattr(data, "y", None)
+        if x is not None and y is not None:
+            return f"{action.name}@{int(x)},{int(y)}"
+    return str(action.name)
+
+
+def action_from_transition_key(key: str) -> GameAction:
+    """Reconstruct a GameAction (with coords when present) from a key."""
+
+    if "@" not in key:
+        return GameAction[key]
+
+    action_name, coords = key.split("@", 1)
+    base_action = GameAction[action_name]
+    if action_name != "ACTION6":
+        return base_action
+
+    try:
+        x_str, y_str = coords.split(",", 1)
+        x = int(x_str)
+        y = int(y_str)
+    except (ValueError, AttributeError) as exc:
+        raise ValueError(f"Invalid transition key: {key}") from exc
+
+    action = base_action.clone()
+    action.set_data({"x": x, "y": y})
+    return action
 
 
 class Color(IntEnum):
@@ -35,7 +70,7 @@ class Color(IntEnum):
     YELLOW = 11
     ORANGE = 12
     DARK_RED_MAROON = 13
-    LIGHT_GREY = 14
+    ENERGY_GREEN = 14
     PURPLE = 15
 
 
@@ -55,7 +90,7 @@ PALETTE: list[tuple[int, int, int]] = [
     (248, 221, 74),    # 11 - yellow
     (255, 132, 0),     # 12 - orange
     (134, 33, 51),     # 13 - dark red/maroon
-    (214, 214, 214),   # 14 - light grey
+    (115, 202, 77),    # 14 - energy green
     (153, 90, 208),    # 15 - purple
 ]
 
@@ -95,7 +130,7 @@ class EnergyHudMeasurement:
 class StateRecord:
     """Observed information about a specific frame hash."""
 
-    transitions: Dict[GameAction, FrameHash] = field(default_factory=dict)
+    transitions: Dict[str, FrameHash] = field(default_factory=dict)
     level: Optional[int] = None
     energy: Optional[int] = None
     is_initial: bool = False
@@ -104,9 +139,7 @@ class StateRecord:
 
     def to_dict(self) -> Dict[str, object]:
         payload: Dict[str, object] = {
-            "transitions": {
-                action.name: str(target) for action, target in self.transitions.items()
-            }
+            "transitions": {key: str(target) for key, target in self.transitions.items()}
         }
         if self.level is not None:
             payload["level"] = self.level
@@ -123,18 +156,23 @@ class StateRecord:
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> "StateRecord":
         transitions_payload = payload.get("transitions", {})
-        transitions: Dict[GameAction, FrameHash] = {}
+        transitions: Dict[str, FrameHash] = {}
         if isinstance(transitions_payload, Mapping):
-            for action_name, raw in transitions_payload.items():
-                if action_name not in GameAction.__members__:
-                    logger.warning("Skipping unknown action in memory payload: %s", action_name)
+            for action_key, raw in transitions_payload.items():
+                if not isinstance(action_key, str):
+                    logger.warning("Skipping non-string action key in memory payload: %s", action_key)
                     continue
                 try:
-                    transitions[GameAction[action_name]] = FrameHash(str(raw))
+                    action_from_transition_key(action_key)
+                except (KeyError, ValueError):
+                    logger.warning("Skipping unknown action in memory payload: %s", action_key)
+                    continue
+                try:
+                    transitions[action_key] = FrameHash(str(raw))
                 except (TypeError, ValueError):
                     logger.warning(
                         "Skipping transition for action %s due to invalid target %s",
-                        action_name,
+                        action_key,
                         raw,
                     )
                     continue

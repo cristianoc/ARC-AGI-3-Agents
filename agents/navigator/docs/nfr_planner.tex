@@ -12,18 +12,18 @@
 
 \section{Problem Setting}
 
-Let $\mathcal{G} = (S, A, T)$ denote the agent interaction graph. States $s \in S$ encode masked ARC frames, actions $a \in A$ are constrained to a caller-provided navigational action set $A_{\mathrm{nav}} \subseteq A$ (typically the four arrows; the special action $\mathrm{RESET}$ is treated separately), and $T : S \times A \to S \cup \{\bot\}$ is the partial transition function estimated from experience ($\bot$ indicates an unknown successor).
+Let $\mathcal{G} = (S, A, T)$ denote the agent interaction graph. States $s \in S$ encode masked ARC frames, actions $a \in A$ are constrained to a caller-provided navigational action set $A_{\mathrm{nav}}(s) \subseteq A(s)$ (often including the four arrows and, when available, additional actions such as clicks; the special action $\mathrm{RESET}$ is treated separately), and $T : S \times A \to S \cup \{\bot\}$ is the partial transition function estimated from experience ($\bot$ indicates an unknown successor).
 
 Each play starts at a known level start state $s_0 \in S$. The navigator also tracks the current level index $\ell_t$ and stores the terminal state $s_{\mathrm{term}}(\ell)$ whenever a level completion is observed. The planner may be given an optional goal hash $g$ (for example, the current level's recorded terminal state) to prioritise reaching it before resuming generic exploration. The planner is given:
 \begin{itemize}
     \item $S_{\mathrm{disc}} \subseteq S$: discovered states from prior episodes.
     \item $T_{\mathrm{known}} : S_{\mathrm{disc}} \times A \to S_{\mathrm{disc}} \cup \{\bot\}$: the partial transition map recovered from experience (returning $\bot$ when a transition has not yet been seen).
-    \item $A(s) \subseteq A$: actions the environment currently allows at state $s$.
+    \item $A(s) \subseteq A$: actions the environment currently allows at state $s$, and $A_{\mathrm{nav}}(s) \subseteq A(s)$ the subset considered by the planner.
     \item Each discovered state keeps additional metadata indicating whether it is a terminal (level-completion) state, an initial level start, or a failure (game-over) state. The planner uses these flags to skip failure nodes and to honour requested terminal targets.
-    \item $\mathcal{F} = \{\, s \in S_{\mathrm{disc}} \setminus S_{\mathrm{fail}} \mid \exists a \in A_{\mathrm{nav}} : T_{\mathrm{known}}(s,a) = \bot \,\}$, the \emph{frontier}: discovered states with at least one action in $A_{\mathrm{nav}}$ whose successor is unknown in $T_{\mathrm{known}}$.
+    \item $\mathcal{F} = \{\, s \in S_{\mathrm{disc}} \setminus S_{\mathrm{fail}} \mid \exists a \in A_{\mathrm{nav}}(s) : T_{\mathrm{known}}(s,a) = \bot \,\}$, the \emph{frontier}: discovered states with at least one action in $A_{\mathrm{nav}}(s)$ whose successor is unknown in $T_{\mathrm{known}}$.
 \end{itemize}
 
-Failure states are updated whenever a transition produces a game-over screen, ensuring the planner does not repeatedly probe known dead ends. Terminal states are recorded when a level completion is observed and can be supplied as explicit targets.
+Failure states are updated whenever a transition produces a game-over screen, ensuring the planner does not repeatedly probe known dead ends. Transitions into such failure states are ignored when constructing $\mathcal{G}_t$ and when enumerating frontier candidates. Terminal states are recorded when a level completion is observed and can be supplied as explicit targets.
 
 During an episode the agent sits in state $s_t$ with available actions $A_t = A(s_t)$. The planner must output $a_t \in A_t \cup \{\mathrm{RESET}\}$ to minimise the distance to a frontier while optionally using reset jumps to $s_0$. When a terminal state $s_{\mathrm{term}}(\ell)$ is known for the current level and supplied as \texttt{target\_state}, that state is treated as a temporary goal that can outweigh frontier expansion.
 
@@ -49,7 +49,7 @@ The planner combines goal-directed replay with frontier exploration. At every de
     \label{eq:bfs-reset}
     D_t^{0}, P_t^{0} &= \mathrm{BFS}(\mathcal{G}_t, s_0).
     \end{align}
-    These maps provide shortest-path distances and predecessors inside the known subgraph. Both traversals consider only $A_{\mathrm{nav}}$ edges.
+    These maps provide shortest-path distances and predecessors inside the known subgraph. Both traversals consider only edges induced by the current navigational actions $A_{\mathrm{nav}}(s)$ (e.g., arrows and any enabled click actions), ignoring transitions into failure states.
     \item \textbf{Candidate evaluation.} If a specific goal $g$ was chosen, evaluate it directly: when $g$ is reachable from $s_t$ (i.e. $g \in \mathrm{dom}(D_t^{c})$), follow the path recovered from $P_t^{c}$; otherwise ignore $g$ and proceed with frontier selection. When no goal is set, compute the reset-aware cost for every frontier node as
     \begin{equation}
         \label{eq:cost}
@@ -60,6 +60,13 @@ The planner combines goal-directed replay with frontier exploration. At every de
 \end{enumerate}
 
 The resulting policy naturally alternates between fast replay of known solutions (when a goal state is provided) and systematic exploration of the nearest frontier.
+
+\paragraph{Richer action types.}
+In some environments $A_{\mathrm{nav}}(s)$ may contain actions with additional
+parameters (for example, click actions annotated with screen coordinates).
+The planner treats these as ordinary edges in $\mathcal{G}$: planning and
+cost computation depend only on the induced transition graph and are agnostic
+to the internal structure of actions.
 
 \section{Desirable Properties}
 

@@ -237,7 +237,7 @@ class BaseAbstractionNavigator(Agent):
 
         level, level_start_state = self._infer_level(
             prev_snapshot,
-            score=frame_data.score,
+            score=frame_data.levels_completed,
             frame_hash=frame_hash,
         )
 
@@ -245,7 +245,7 @@ class BaseAbstractionNavigator(Agent):
             frame=frame_data,
             abstraction=abstraction,
             frame_hash=frame_hash,
-            score=frame_data.score,
+            score=frame_data.levels_completed,
             level=level,
             energy_measurement=energy_measurement,
             level_start_state=level_start_state,

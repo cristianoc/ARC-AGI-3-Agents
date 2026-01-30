@@ -98,6 +98,7 @@ class BaseAbstractionNavigator(Agent):
             state_graph=self.memory.state_graph,
         )
         self._snapshots: deque[NavigatorSnapshot] = deque(maxlen=3)
+        self._exploration_exhausted = False
 
     # Hints for the type checker; values are initialised in Agent.__init__
     game_id: str
@@ -116,6 +117,7 @@ class BaseAbstractionNavigator(Agent):
             [
                 latest_frame.state is GameState.WIN,
                 self.action_counter >= self.MAX_ACTIONS,
+                self._exploration_exhausted,
             ]
         )
 
@@ -200,8 +202,15 @@ class BaseAbstractionNavigator(Agent):
         )
 
         if nfr_action is None:
+            logger.error(
+                "%s exploration exhausted: no frontiers remaining at level %d with %d states explored",
+                self.game_id,
+                snapshot.level,
+                len(self.memory.state_graph),
+            )
+            self._exploration_exhausted = True
             action = GameAction.RESET
-            action.reasoning = "nfr-fallback-reset"
+            action.reasoning = "exploration-exhausted"
             self.last_action = None
             return action
 

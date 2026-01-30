@@ -37,7 +37,7 @@ class NearFrontierPlanner:
         target_state: Optional[FrameHash] = None,
     ) -> Optional[GameAction]:
 
-        adj = self._build_adj(available_actions)
+        adj = self._build_adj()
         s0 = level_start_state
         if target_state is not None and self._is_blocked(target_state):
             target_state = None
@@ -115,15 +115,18 @@ class NearFrontierPlanner:
                 states.add(target)
         return states
 
-    def _build_adj(self, available_actions: Sequence[GameAction]) -> Dict[FrameHash, List[Tuple[FrameHash, GameAction]]]:
+    def _build_adj(self) -> Dict[FrameHash, List[Tuple[FrameHash, GameAction]]]:
+        """Build adjacency graph using ALL known transitions.
+
+        For click-based games, different states have different available actions
+        (different clickable positions per level). To enable cross-level navigation,
+        we include all known edges regardless of current available_actions.
+        """
         adjacency: Dict[FrameHash, List[Tuple[FrameHash, GameAction]]] = {}
-        available_keys = {transition_key_from_action(action) for action in available_actions}
         for state, record in self._state_graph.items():
             if record.is_game_over:
                 continue
             for action_key, target in record.transitions.items():
-                if action_key not in available_keys:
-                    continue
                 # Skip unexplored transitions (None) - can't navigate through unknown edges
                 if target is None or self._is_blocked(target):
                     continue

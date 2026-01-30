@@ -80,8 +80,8 @@ def detect_clickable_squares_vc33(frame: Frame) -> list[tuple[int, int]]:
     coords: list[tuple[int, int]] = []
     seen: set[tuple[int, int]] = set()
     color_groups = (
-        (Color.MEDIUM_BLUE, Color.SKY_BLUE),
-        (Color.CORAL_RED, Color.DARK_RED_MAROON),
+        (Color.BLUE, Color.BLUE_LIGHT),
+        (Color.RED, Color.MAROON),
     )
 
     for group in color_groups:
@@ -164,12 +164,12 @@ def _measure_energy_ls20(frame: Frame) -> Optional[EnergyHudMeasurement]:
     blocks: list[int] = []
     for x in range(x0, upper_x + 1, 2):
         value = row[x]
-        if value in (Color.MEDIUM_GREY, Color.PURPLE):
+        if value in (Color.NEUTRAL, Color.PURPLE):
             blocks.append(value)
         elif blocks:
             break
 
-    if any(v not in (Color.MEDIUM_GREY, Color.PURPLE) for v in blocks):
+    if any(v not in (Color.NEUTRAL, Color.PURPLE) for v in blocks):
         return None
 
     filled = sum(1 for v in blocks if v == Color.PURPLE)
@@ -189,11 +189,11 @@ def _measure_energy_as66(frame: Frame) -> Optional[EnergyHudMeasurement]:
 
 
 def _measure_energy_vc33(frame: Frame) -> Optional[EnergyHudMeasurement]:
-    """Energy is the count of yellow pixels in the top row."""
+    """Energy is the count of pink pixels in the top row."""
 
     top_row = frame[0]
-    yellow_pixels = sum(1 for value in top_row if value == Color.BRIGHT_YELLOW)
-    return EnergyHudMeasurement(value=yellow_pixels, mask=VC33_ENERGY_HUD_MASK)
+    pink_pixels = sum(1 for value in top_row if value == Color.MAGENTA_LIGHT)
+    return EnergyHudMeasurement(value=pink_pixels, mask=VC33_ENERGY_HUD_MASK)
 
 
 def _measure_energy_for_game(game_id: str) -> Callable[[Frame], Optional[EnergyHudMeasurement]]:

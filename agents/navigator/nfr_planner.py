@@ -35,9 +35,10 @@ class NearFrontierPlanner:
         available_actions: Sequence[GameAction],
         level_start_state: FrameHash,
         target_state: Optional[FrameHash] = None,
+        current_level: Optional[int] = None,
     ) -> Optional[GameAction]:
 
-        adj = self._build_adj()
+        adj = self._build_adj(level=current_level)
         s0 = level_start_state
         if target_state is not None and self._is_blocked(target_state):
             target_state = None
@@ -54,7 +55,7 @@ class NearFrontierPlanner:
 
         INF = 10**9
         best: Optional[Tuple[int, int, FrameHash]] = None
-        for state in self._frontier_states():
+        for state in self._frontier_states(level=current_level):
             d_current = dist_c.get(state, INF)
             d_reset = dist_s0.get(state, INF)
             frontier_cost = min(d_current, 1 + d_reset)
@@ -102,33 +103,46 @@ class NearFrontierPlanner:
 
         return None
 
-    def _discovered_states(self) -> set[FrameHash]:
+    def _discovered_states(self, *, level: Optional[int] = None) -> set[FrameHash]:
         states: set[FrameHash] = set()
         for state, record in self._state_graph.items():
             if record.is_game_over:
+                continue
+            # Filter by level if specified
+            if level is not None and record.level != level:
                 continue
             states.add(state)
             for target in record.transitions.values():
                 # Skip unexplored transitions (None) and blocked states
                 if target is None or self._is_blocked(target):
                     continue
+                # Check target's level too
+                target_record = self._state_graph.get(target)
+                if level is not None and target_record and target_record.level != level:
+                    continue
                 states.add(target)
         return states
 
-    def _build_adj(self) -> Dict[FrameHash, List[Tuple[FrameHash, GameAction]]]:
-        """Build adjacency graph using ALL known transitions.
+    def _build_adj(self, *, level: Optional[int] = None) -> Dict[FrameHash, List[Tuple[FrameHash, GameAction]]]:
+        """Build adjacency graph using known transitions.
 
-        For click-based games, different states have different available actions
-        (different clickable positions per level). To enable cross-level navigation,
-        we include all known edges regardless of current available_actions.
+        If level is specified, only includes states belonging to that level.
+        This speeds up planning by excluding unreachable states from other levels.
         """
         adjacency: Dict[FrameHash, List[Tuple[FrameHash, GameAction]]] = {}
         for state, record in self._state_graph.items():
             if record.is_game_over:
                 continue
+            # Filter by level if specified
+            if level is not None and record.level != level:
+                continue
             for action_key, target in record.transitions.items():
                 # Skip unexplored transitions (None) - can't navigate through unknown edges
                 if target is None or self._is_blocked(target):
+                    continue
+                # Check target's level too
+                target_record = self._state_graph.get(target)
+                if level is not None and target_record and target_record.level != level:
                     continue
                 action = action_from_transition_key(action_key)
                 adjacency.setdefault(state, []).append((target, action))
@@ -170,9 +184,9 @@ class NearFrontierPlanner:
         actions.reverse()
         return actions
 
-    def _frontier_states(self) -> Iterable[FrameHash]:
+    def _frontier_states(self, *, level: Optional[int] = None) -> Iterable[FrameHash]:
         """Yield states that have unexplored (None) transitions."""
-        for state in self._discovered_states():
+        for state in self._discovered_states(level=level):
             if self._is_blocked(state):
                 continue
             record = self._state_graph.get(state)

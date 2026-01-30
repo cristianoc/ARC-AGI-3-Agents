@@ -223,6 +223,7 @@ class BaseAbstractionNavigator(Agent):
             available_actions=candidate_actions,
             level_start_state=snapshot.level_start_state,
             target_state=terminal_target,
+            current_level=snapshot.level,
         )
 
         if nfr_action is None:

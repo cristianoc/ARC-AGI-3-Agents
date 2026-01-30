@@ -29,6 +29,7 @@ from .types import (
     Memory,
     action_from_transition_key,
     load_memory,
+    normalize_actions,
     save_memory,
     transition_key_from_action,
 )
@@ -249,7 +250,7 @@ class BaseAbstractionNavigator(Agent):
             level=level,
             energy_measurement=energy_measurement,
             level_start_state=level_start_state,
-            available_actions=frame_data.available_actions,
+            available_actions=normalize_actions(frame_data.available_actions),
             game_state=frame_data.state,
         )
 

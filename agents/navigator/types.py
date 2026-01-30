@@ -17,6 +17,10 @@ FrameHash = NewType("FrameHash", str)
 
 Frame = list[list[int]] # 64x64
 
+def normalize_actions(actions: Sequence[int]) -> list[GameAction]:
+    """Convert a list of action IDs (from arcengine) to GameAction instances."""
+    return [GameAction.from_id(a) for a in actions]
+
 
 def transition_key_from_action(action: GameAction) -> str:
     """Serialize an action (including coordinates for ACTION6) into a key."""

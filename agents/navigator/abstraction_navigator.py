@@ -189,12 +189,11 @@ def _measure_energy_as66(frame: Frame) -> Optional[EnergyHudMeasurement]:
 
 
 def _measure_energy_vc33(frame: Frame) -> Optional[EnergyHudMeasurement]:
-    """Energy decreases as bright white pixels overwrite the top row from the right."""
+    """Energy is the count of yellow pixels in the top row."""
 
-    top_row = frame[-1]
-    white_pixels = sum(1 for value in top_row if value == Color.BRIGHT_WHITE)
-    energy_value = 64 - white_pixels
-    return EnergyHudMeasurement(value=energy_value, mask=VC33_ENERGY_HUD_MASK)
+    top_row = frame[0]
+    yellow_pixels = sum(1 for value in top_row if value == Color.BRIGHT_YELLOW)
+    return EnergyHudMeasurement(value=yellow_pixels, mask=VC33_ENERGY_HUD_MASK)
 
 
 def _measure_energy_for_game(game_id: str) -> Callable[[Frame], Optional[EnergyHudMeasurement]]:

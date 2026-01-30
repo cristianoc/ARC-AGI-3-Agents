@@ -21,3 +21,10 @@ tests/recordings/not-a-recording.txt
 memory.db
 
 environment_files/
+*.aux
+
+# Lockfiles
+uv.lock
+
+# Lockfiles
+uv.lock

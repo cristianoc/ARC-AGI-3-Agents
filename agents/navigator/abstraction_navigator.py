@@ -66,17 +66,13 @@ class PlayerDetection:
 
 
 def detect_clickable_squares_vc33(frame: Frame) -> list[tuple[int, int]]:
-    """Detect 4x4 blue and red clickable squares in the frame."""
+    """Detect blue and red clickable squares in the frame.
 
-    if len(frame) < 4 or len(frame[-1]) < 4:
-        return []
+    Searches for squares of size 2x2, 3x3, and 4x4 (different levels use different sizes).
+    Excludes top rows (HUD area) to avoid false positives from energy bar.
+    """
 
     array = np.asarray(frame, dtype=np.int16)
-    windows = sliding_window_view(array, (4, 4))
-
-    if windows.size == 0:
-        return []
-
     coords: list[tuple[int, int]] = []
     seen: set[tuple[int, int]] = set()
     color_groups = (
@@ -84,17 +80,29 @@ def detect_clickable_squares_vc33(frame: Frame) -> list[tuple[int, int]]:
         (Color.RED, Color.MAROON),
     )
 
-    for group in color_groups:
-        combined_mask = np.zeros(windows.shape[:2], dtype=bool)
-        for color in group:
-            combined_mask |= np.all(windows == int(color), axis=(-2, -1))
-        ys, xs = np.where(combined_mask)
-        for y, x in zip(ys, xs):
-            if (y, x) in seen:
-                continue
-            seen.add((y, x))
-            _ = Color(int(array[y, x]))
-            coords.append((int(x), int(y)))
+    for size in (4, 3, 2):
+        if len(frame) < size or len(frame[-1]) < size:
+            continue
+
+        windows = sliding_window_view(array, (size, size))
+        if windows.size == 0:
+            continue
+
+        # Skip top rows to exclude HUD area
+        min_y = size
+
+        for group in color_groups:
+            combined_mask = np.zeros(windows.shape[:2], dtype=bool)
+            for color in group:
+                combined_mask |= np.all(windows == int(color), axis=(-2, -1))
+            ys, xs = np.where(combined_mask)
+            for y, x in zip(ys, xs):
+                if y < min_y:
+                    continue
+                if (y, x) in seen:
+                    continue
+                seen.add((y, x))
+                coords.append((int(x), int(y)))
 
     return coords
 

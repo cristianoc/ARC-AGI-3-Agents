@@ -143,7 +143,7 @@ class BaseAbstractionNavigator(Agent):
             action.reasoning = "game-over-reset"
             return action
 
-        if prev_snapshot is not None and snapshot.score != prev_snapshot.score:
+        if prev_snapshot is not None and snapshot.score > prev_snapshot.score:
             self._handle_level_change(prev_snapshot, snapshot)
         elif self._should_reset_for_apparent_restart(prev_snapshot, snapshot):
             logger.info(

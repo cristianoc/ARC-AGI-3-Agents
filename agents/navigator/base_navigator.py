@@ -138,8 +138,15 @@ class BaseAbstractionNavigator(Agent):
 
         self.memory.record_level(snapshot.frame_hash, snapshot.level)
 
+        # Compute candidate actions early so we can record them in state graph.
+        # For click-based games, these are the detected clickable squares.
+        click_actions = _click_actions_for_snapshot(snapshot, self.game_id)
+        candidate_actions: list[GameAction] = (
+            click_actions if click_actions is not None else snapshot.available_actions
+        )
+
         if snapshot.game_state is GameState.GAME_OVER:
-            self._track_state_graph(prev_snapshot, snapshot)
+            self._track_state_graph(prev_snapshot, snapshot, candidate_actions)
             self.memory.mark_game_over(snapshot.frame_hash)
             logger.info("%s resetting after game over", self.game_id)
             self._reset_tracking()
@@ -160,7 +167,7 @@ class BaseAbstractionNavigator(Agent):
             action.reasoning = "apparent-restart-reset"
             self.last_action = None
             return action
-        self._track_state_graph(prev_snapshot, snapshot)
+        self._track_state_graph(prev_snapshot, snapshot, candidate_actions)
 
         state_record = self.memory.state_graph.get(snapshot.frame_hash)
         if state_record is not None and state_record.is_terminal:
@@ -183,11 +190,6 @@ class BaseAbstractionNavigator(Agent):
                         else:
                             self.last_action = None
                         return action
-
-        click_actions = _click_actions_for_snapshot(snapshot, self.game_id)
-        candidate_actions: list[GameAction] = (
-            click_actions if click_actions is not None else snapshot.available_actions
-        )
 
         terminal_target = self.memory.terminal_for_level(snapshot.level)
         nfr_action = self._nfr_planner.next_action(
@@ -323,8 +325,9 @@ class BaseAbstractionNavigator(Agent):
         self,
         prev_snapshot: Optional[NavigatorSnapshot],
         snapshot: NavigatorSnapshot,
+        available_actions: list[GameAction],
     ) -> None:
-        self._record_state_visit(snapshot)
+        self._record_state_visit(snapshot, available_actions)
         self.memory.record_level(snapshot.frame_hash, snapshot.level)
 
         previous_state_hash = prev_snapshot.frame_hash if prev_snapshot else None
@@ -340,8 +343,17 @@ class BaseAbstractionNavigator(Agent):
             snapshot.frame_hash,
         )
 
-    def _record_state_visit(self, snapshot: NavigatorSnapshot) -> None:
+    def _record_state_visit(
+        self, snapshot: NavigatorSnapshot, available_actions: list[GameAction]
+    ) -> None:
         record = self.memory.ensure_state(snapshot.frame_hash)
+
+        # Record all available actions as unexplored (None) if not already known
+        for action in available_actions:
+            key = transition_key_from_action(action)
+            if key not in record.transitions:
+                record.transitions[key] = None
+
         energy_measurement = snapshot.energy_measurement
         if energy_measurement is None:
             return
@@ -369,7 +381,8 @@ class BaseAbstractionNavigator(Agent):
         self.memory.ensure_state(next_hash)
         key = transition_key_from_action(action)
         existing = previous_record.transitions.get(key)
-        if existing is None:
+        # Set transition if not recorded or was unexplored (None)
+        if key not in previous_record.transitions or existing is None:
             previous_record.transitions[key] = next_hash
             return
         if existing != next_hash:

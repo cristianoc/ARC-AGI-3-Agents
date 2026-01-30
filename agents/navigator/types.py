@@ -117,9 +117,14 @@ class EnergyHudMeasurement:
 
 @dataclass
 class StateRecord:
-    """Observed information about a specific frame hash."""
+    """Observed information about a specific frame hash.
 
-    transitions: Dict[str, FrameHash] = field(default_factory=dict)
+    Transitions map action keys to either:
+    - A FrameHash (the action has been tried and leads to that state)
+    - None (the action is available but hasn't been tried yet)
+    """
+
+    transitions: Dict[str, Optional[FrameHash]] = field(default_factory=dict)
     level: Optional[int] = None
     energy: Optional[int] = None
     is_initial: bool = False
@@ -128,7 +133,10 @@ class StateRecord:
 
     def to_dict(self) -> Dict[str, object]:
         payload: Dict[str, object] = {
-            "transitions": {key: str(target) for key, target in self.transitions.items()}
+            "transitions": {
+                key: (str(target) if target is not None else None)
+                for key, target in self.transitions.items()
+            }
         }
         if self.level is not None:
             payload["level"] = self.level
@@ -145,7 +153,7 @@ class StateRecord:
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> "StateRecord":
         transitions_payload = payload.get("transitions", {})
-        transitions: Dict[str, FrameHash] = {}
+        transitions: Dict[str, Optional[FrameHash]] = {}
         if isinstance(transitions_payload, Mapping):
             for action_key, raw in transitions_payload.items():
                 if not isinstance(action_key, str):
@@ -155,6 +163,10 @@ class StateRecord:
                     action_from_transition_key(action_key)
                 except (KeyError, ValueError):
                     logger.warning("Skipping unknown action in memory payload: %s", action_key)
+                    continue
+                # Handle null (unexplored) transitions
+                if raw is None:
+                    transitions[action_key] = None
                     continue
                 try:
                     transitions[action_key] = FrameHash(str(raw))

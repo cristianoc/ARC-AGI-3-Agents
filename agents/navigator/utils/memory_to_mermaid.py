@@ -45,6 +45,11 @@ def _escape_label(label: str) -> str:
 def _format_node_label(state: str, record: Dict[str, Any]) -> str:
     energy = record.get("energy")
     energy_text = f"E={energy}"
+    # Count unexplored (null) transitions
+    transitions = record.get("transitions", {})
+    unexplored = sum(1 for t in transitions.values() if t is None)
+    if unexplored > 0:
+        return f"{state}<br/>{energy_text} 🔍{unexplored}"
     return f"{state}<br/>{energy_text}"
 
 
@@ -108,7 +113,8 @@ def memory_to_mermaid(memory_payload: Dict[str, Any]) -> str:
     referenced_states: set[str] = set()
     for state, record in state_graph.items():
         transitions = record.get("transitions", {})
-        referenced_states.update(str(target) for target in transitions.values())
+        # Skip None (unexplored) targets
+        referenced_states.update(str(target) for target in transitions.values() if target is not None)
 
     missing_states = referenced_states - known_states
     if missing_states:
@@ -139,6 +145,9 @@ def memory_to_mermaid(memory_payload: Dict[str, Any]) -> str:
         src_level = state_level(state)
         transitions = record.get("transitions", {})
         for action, target in sorted(transitions.items()):
+            # Skip unexplored (null) transitions - they're shown in node annotation
+            if target is None:
+                continue
             dst_id = _sanitize_node_id(target)
             mermaid_lines.append(f"    {src_id} -- {action} --> {dst_id}")
             dst_level = state_level(target)

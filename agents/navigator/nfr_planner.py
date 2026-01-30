@@ -54,7 +54,7 @@ class NearFrontierPlanner:
 
         INF = 10**9
         best: Optional[Tuple[int, int, FrameHash]] = None
-        for state in self._frontier_states(available_actions):
+        for state in self._frontier_states():
             d_current = dist_c.get(state, INF)
             d_reset = dist_s0.get(state, INF)
             frontier_cost = min(d_current, 1 + d_reset)
@@ -109,7 +109,8 @@ class NearFrontierPlanner:
                 continue
             states.add(state)
             for target in record.transitions.values():
-                if self._is_blocked(target):
+                # Skip unexplored transitions (None) and blocked states
+                if target is None or self._is_blocked(target):
                     continue
                 states.add(target)
         return states
@@ -123,7 +124,8 @@ class NearFrontierPlanner:
             for action_key, target in record.transitions.items():
                 if action_key not in available_keys:
                     continue
-                if self._is_blocked(target):
+                # Skip unexplored transitions (None) - can't navigate through unknown edges
+                if target is None or self._is_blocked(target):
                     continue
                 action = action_from_transition_key(action_key)
                 adjacency.setdefault(state, []).append((target, action))
@@ -165,21 +167,29 @@ class NearFrontierPlanner:
         actions.reverse()
         return actions
 
-    def _frontier_states(self, available_actions: Sequence[GameAction]) -> Iterable[FrameHash]:
+    def _frontier_states(self) -> Iterable[FrameHash]:
+        """Yield states that have unexplored (None) transitions."""
         for state in self._discovered_states():
             if self._is_blocked(state):
                 continue
-            for action in available_actions:
-                if not self._is_action_known(state, action):
-                    yield state
-                    break
+            record = self._state_graph.get(state)
+            if record is None:
+                # State discovered as transition target but never visited - it's a frontier
+                yield state
+                continue
+            # Check if any recorded transition is unexplored (None)
+            if any(target is None for target in record.transitions.values()):
+                yield state
 
     def _is_action_known(self, state: FrameHash, action: GameAction) -> bool:
+        """Check if an action has been explored (has a non-None target)."""
         record = self._state_graph.get(state)
         if record is None:
             return False
         key = transition_key_from_action(action)
-        return key in record.transitions
+        target = record.transitions.get(key)
+        # Action is "known" only if it exists AND has been explored (not None)
+        return target is not None
 
     def _is_blocked(self, state: FrameHash) -> bool:
         record = self._state_graph.get(state)

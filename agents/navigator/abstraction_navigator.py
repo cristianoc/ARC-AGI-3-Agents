@@ -65,15 +65,16 @@ class PlayerDetection:
 
 
 def detect_clickable_squares_vc33(frame: Frame) -> list[tuple[int, int]]:
-    """Detect blue clickable squares, returning their top-left corners."""
+    """Detect clickable squares (blue or orange), returning their top-left corners."""
     arr = np.asarray(frame, dtype=np.int16)
-    blue = arr == int(Color.BLUE)
-    blue[:2, :] = False  # exclude HUD
+    # Clickable squares can be blue or orange
+    clickable = (arr == int(Color.BLUE)) | (arr == int(Color.ORANGE))
+    clickable[:2, :] = False  # exclude HUD
 
-    # Top-left corner: blue pixel with no blue above and no blue to the left
-    above = np.pad(blue, ((1, 0), (0, 0)), constant_values=False)[:-1, :]
-    left = np.pad(blue, ((0, 0), (1, 0)), constant_values=False)[:, :-1]
-    corners = blue & ~above & ~left
+    # Top-left corner: clickable pixel with no clickable above and no clickable to the left
+    above = np.pad(clickable, ((1, 0), (0, 0)), constant_values=False)[:-1, :]
+    left = np.pad(clickable, ((0, 0), (1, 0)), constant_values=False)[:, :-1]
+    corners = clickable & ~above & ~left
 
     ys, xs = np.where(corners)
     return [(int(x), int(y)) for x, y in zip(xs, ys)]

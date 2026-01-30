@@ -107,6 +107,10 @@ class BaseAbstractionNavigator(Agent):
     def name(self) -> str:
         return f"{super().name}.{self.MAX_ACTIONS}"
 
+    @property
+    def states_explored(self) -> int:
+        return len(self.memory.state_graph)
+
     def is_done(self, frames: list[FrameData], latest_frame: FrameData) -> bool:
         return any(
             [

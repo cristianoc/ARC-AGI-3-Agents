@@ -28,7 +28,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
 
 from ..agent import Agent
 from .abstractions import USER_ABSTRACTIONS, AbstractionDetector
@@ -66,45 +65,18 @@ class PlayerDetection:
 
 
 def detect_clickable_squares_vc33(frame: Frame) -> list[tuple[int, int]]:
-    """Detect blue and red clickable squares in the frame.
+    """Detect blue clickable squares, returning their top-left corners."""
+    arr = np.asarray(frame, dtype=np.int16)
+    blue = arr == int(Color.BLUE)
+    blue[:2, :] = False  # exclude HUD
 
-    Searches for squares of size 2x2, 3x3, and 4x4 (different levels use different sizes).
-    Excludes top rows (HUD area) to avoid false positives from energy bar.
-    """
+    # Top-left corner: blue pixel with no blue above and no blue to the left
+    above = np.pad(blue, ((1, 0), (0, 0)), constant_values=False)[:-1, :]
+    left = np.pad(blue, ((0, 0), (1, 0)), constant_values=False)[:, :-1]
+    corners = blue & ~above & ~left
 
-    array = np.asarray(frame, dtype=np.int16)
-    coords: list[tuple[int, int]] = []
-    seen: set[tuple[int, int]] = set()
-    color_groups = (
-        (Color.BLUE, Color.BLUE_LIGHT),
-        (Color.RED, Color.MAROON),
-    )
-
-    for size in (4, 3, 2):
-        if len(frame) < size or len(frame[-1]) < size:
-            continue
-
-        windows = sliding_window_view(array, (size, size))
-        if windows.size == 0:
-            continue
-
-        # Skip top rows to exclude HUD area
-        min_y = size
-
-        for group in color_groups:
-            combined_mask = np.zeros(windows.shape[:2], dtype=bool)
-            for color in group:
-                combined_mask |= np.all(windows == int(color), axis=(-2, -1))
-            ys, xs = np.where(combined_mask)
-            for y, x in zip(ys, xs):
-                if y < min_y:
-                    continue
-                if (y, x) in seen:
-                    continue
-                seen.add((y, x))
-                coords.append((int(x), int(y)))
-
-    return coords
+    ys, xs = np.where(corners)
+    return [(int(x), int(y)) for x, y in zip(xs, ys)]
 
 
 def detect_player(frame_cells: Frame) -> Optional[PlayerDetection]:

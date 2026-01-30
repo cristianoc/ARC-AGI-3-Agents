@@ -81,8 +81,9 @@ class Agent(ABC):
             )
             if frame := self.take_action(action):
                 self.append_frame(frame)
+                states_info = f", states {self.states_explored}" if self.states_explored is not None else ""
                 logger.info(
-                    f"{self.game_id} - {action}: count {self.action_counter}, levels completed {frame.levels_completed}, avg fps {self.fps})"
+                    f"{self.game_id} - {action}: count {self.action_counter}, levels completed {frame.levels_completed}{states_info}, avg fps {self.fps})"
                 )
             self.action_counter += 1
 
@@ -106,6 +107,11 @@ class Agent(ABC):
             return 0.0
         elapsed_time = max(self.seconds, 0.1)
         return round(self.action_counter / elapsed_time, 2)
+
+    @property
+    def states_explored(self) -> Optional[int]:
+        """Number of unique states explored. Override in subclasses that track state."""
+        return None
 
     @property
     def is_playback(self) -> bool:

@@ -107,8 +107,29 @@ def main() -> None:
         help="Comma-separated list of tags for the scorecard (e.g., 'experiment,v1.0')",
         default=None,
     )
+    parser.add_argument(
+        "-m",
+        "--mode",
+        choices=["local", "online"],
+        default="local",
+        help="Run locally (fast, no API key) or online (leaderboard, replays). Default: local",
+    )
+    parser.add_argument(
+        "-s",
+        "--steps",
+        type=int,
+        default=None,
+        help="Maximum number of steps (actions) per game. Default: agent-specific (60 for navigator)",
+    )
 
     args = parser.parse_args()
+
+    # Set operation mode via environment variable (Arcade reads this)
+    # "normal" = local execution + API for downloads; "online" = API only
+    if args.mode == "local":
+        os.environ["OPERATION_MODE"] = "normal"
+    else:
+        os.environ["OPERATION_MODE"] = "online"
 
     if not args.agent:
         logger.error("An Agent must be specified")
@@ -183,7 +204,8 @@ def main() -> None:
         args.agent,
         ROOT_URL,
         games,
-        tags=tags,  # Pass tags as keyword argument
+        tags=tags,
+        max_actions=args.steps,
     )
     agent_thread = threading.Thread(target=partial(run_agent, swarm))
     agent_thread.daemon = True  # die when the main thread dies

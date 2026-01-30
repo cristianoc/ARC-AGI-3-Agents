@@ -78,25 +78,10 @@ class Color(IntEnum):
     PURPLE = 15
 
 
-# 16-color palette as RGB tuples (matches multimodal.py).
-PALETTE: list[tuple[int, int, int]] = [
-    (0xFF, 0xFF, 0xFF),  # 0 White
-    (0xCC, 0xCC, 0xCC),  # 1 Off-white
-    (0x99, 0x99, 0x99),  # 2 Neutral light
-    (0x66, 0x66, 0x66),  # 3 Neutral
-    (0x33, 0x33, 0x33),  # 4 Off-black
-    (0x00, 0x00, 0x00),  # 5 Black
-    (0xE5, 0x3A, 0xA3),  # 6 Magenta
-    (0xFF, 0x7B, 0xCC),  # 7 Magenta light (pink)
-    (0xF9, 0x3C, 0x31),  # 8 Red
-    (0x1E, 0x93, 0xFF),  # 9 Blue
-    (0x88, 0xD8, 0xF1),  # 10 Blue light
-    (0xFF, 0xDC, 0x00),  # 11 Yellow
-    (0xFF, 0x85, 0x1B),  # 12 Orange
-    (0x92, 0x12, 0x31),  # 13 Maroon
-    (0x4F, 0xCC, 0x30),  # 14 Green
-    (0xA3, 0x56, 0xD6),  # 15 Purple
-]
+# 16-color palette as RGB tuples (derived from multimodal._PALETTE, stripping alpha).
+from ..templates.multimodal import _PALETTE as _RGBA_PALETTE
+
+PALETTE: list[tuple[int, int, int]] = [(r, g, b) for r, g, b, _ in _RGBA_PALETTE]
 
 class MaskRect(NamedTuple):
     """Inclusive rectangle specified as (y0, y1, x0, x1)."""

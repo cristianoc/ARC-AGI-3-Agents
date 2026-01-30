@@ -37,6 +37,7 @@ class Swarm:
         ROOT_URL: str,
         games: list[str],
         tags: list[str] = [],
+        max_actions: Optional[int] = None,
     ) -> None:
         from . import AVAILABLE_AGENTS
 
@@ -44,6 +45,7 @@ class Swarm:
         self.ROOT_URL = ROOT_URL
         self.agent_name = agent
         self.agent_class = AVAILABLE_AGENTS[agent]
+        self.max_actions = max_actions
         self.threads = []
         self.agents = []
         self.cleanup_threads = []
@@ -84,6 +86,8 @@ class Swarm:
                 arc_env=self._arc.make(g, scorecard_id=self.card_id),
                 tags=self.tags,
             )
+            if self.max_actions is not None:
+                a.MAX_ACTIONS = self.max_actions
             self.agents.append(a)
 
         # create all the threads

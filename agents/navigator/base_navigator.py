@@ -147,10 +147,34 @@ class BaseAbstractionNavigator(Agent):
             click_actions if click_actions is not None else snapshot.available_actions
         )
 
+        # Diagnostic: detect if we visit a state marked game-over but game says it's playable
+        existing_record = self.memory.state_graph.get(snapshot.frame_hash)
+        if existing_record and existing_record.is_game_over and snapshot.game_state is not GameState.GAME_OVER:
+            logger.warning(
+                "%s MISMATCH: state %s marked game-over in memory but game says %s (energy=%s, level=%d); clearing game-over flag",
+                self.game_id,
+                snapshot.frame_hash,
+                snapshot.game_state.name,
+                snapshot.energy_measurement.value if snapshot.energy_measurement else None,
+                snapshot.level,
+            )
+            existing_record.is_game_over = False
+
         if snapshot.game_state is GameState.GAME_OVER:
             self._track_state_graph(prev_snapshot, snapshot, candidate_actions)
+            prev_hash = prev_snapshot.frame_hash if prev_snapshot else None
+            prev_energy = prev_snapshot.energy_measurement.value if prev_snapshot and prev_snapshot.energy_measurement else None
+            action_name = self.last_action.name if self.last_action else None
+            logger.warning(
+                "%s GAME_OVER: hash=%s energy=%s prev_hash=%s prev_energy=%s action=%s",
+                self.game_id,
+                snapshot.frame_hash,
+                snapshot.energy_measurement.value if snapshot.energy_measurement else None,
+                prev_hash,
+                prev_energy,
+                action_name,
+            )
             self.memory.mark_game_over(snapshot.frame_hash)
-            logger.info("%s resetting after game over", self.game_id)
             self._reset_tracking()
             action = GameAction.RESET
             action.reasoning = "game-over-reset"
@@ -357,6 +381,15 @@ class BaseAbstractionNavigator(Agent):
     ) -> None:
         record = self.memory.ensure_state(snapshot.frame_hash)
 
+        # Diagnostic: warn if recording transitions on a game-over state
+        if record.is_game_over and available_actions:
+            logger.warning(
+                "%s recording %d actions on game-over state %s",
+                self.game_id,
+                len(available_actions),
+                snapshot.frame_hash,
+            )
+
         # Record all available actions as unexplored (None) if not already known
         for action in available_actions:
             key = transition_key_from_action(action)
@@ -373,12 +406,15 @@ class BaseAbstractionNavigator(Agent):
         else:
             if old_energy < energy_measurement.value:
                 logger.info(
-                    "memory: energy increased for %s from %d to %d",
+                    "memory: energy increased for %s from %d to %d; resetting %d transitions to unexplored",
                     snapshot.frame_hash,
                     old_energy,
                     energy_measurement.value,
+                    len(record.transitions),
                 )
                 record.energy = new_energy
+                for key in record.transitions:
+                    record.transitions[key] = None
 
     def _record_state_transition(
         self,
